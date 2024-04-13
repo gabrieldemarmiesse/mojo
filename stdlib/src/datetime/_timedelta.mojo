@@ -15,7 +15,7 @@ from builtin.divmod import divmod
 
 
 fn _divmod_no_raise(a: Int, b: Int) -> Tuple[Int, Int]:
-    debug_assert(b!=0, "We should never try to divide by 0")
+    debug_assert(b != 0, "We should never try to divide by 0")
     try:
         return divmod(a, b)
     except:
