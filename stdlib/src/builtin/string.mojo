@@ -352,6 +352,22 @@ struct String(Sized, Stringable, IntableRaising, KeyElement, Boolable):
         Args:
             impl: The buffer.
         """
+        for i in range(len(impl) - 1):
+            debug_assert(
+                impl[i] != 0,
+                (
+                    "Only the last element of the buffer should be a null"
+                    " terminator."
+                ),
+            )
+            if impl[i] == 0:
+                print(
+                    (
+                        "Only the last element of the buffer should be a null"
+                        " terminator, found one at position: "
+                    ),
+                    str(i),
+                )
         debug_assert(
             impl[-1] == 0,
             "expected last element of String buffer to be null terminator",

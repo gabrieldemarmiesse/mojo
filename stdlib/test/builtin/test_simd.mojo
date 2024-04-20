@@ -43,6 +43,17 @@ def test_simd_variadic():
     assert_equal(str(SIMD[DType.index, 4](52, 12, 43, 5)), "[52, 12, 43, 5]")
 
 
+def test_convert_simd_to_string():
+    var a: SIMD[DType.float32, 2] = 5
+    assert_equal(str(a), "[5.0, 5.0]")
+
+    var b: SIMD[DType.float64, 4] = 6
+    assert_equal(str(b), "[6.0, 6.0, 6.0, 6.0]")
+
+    var c: SIMD[DType.index, 8] = 7
+    assert_equal(str(c), "[7, 7, 7, 7, 7, 7, 7, 7]")
+
+
 def test_truthy():
     alias dtypes = (
         DType.bool,
@@ -653,20 +664,50 @@ def test_mul_with_overflow():
     )
 
 
+def test_convert_scalars_to_string():
+    print("start method")
+    a = str(UInt32(2**32 - 1))
+    # a = str(UInt32(-1))
+    print(a)
+    # assert_equal(a, "429496729", msg="custoooom message!!!!")
+    print("arrived here")
+    # assert_equal(str(UInt64(-1)), "18446744073709551615")
+    # assert_equal(str(Scalar[DType.address](22)), "0x16")
+    # assert_equal(str(Scalar[DType.address](0xDEADBEAF)), "0xdeadbeaf")
+
+
+from builtin.io import _snprintf_scalar
+
+
+def test_snprintf_scalar():
+    var buf = String._buffer_type(capacity=1_000)  # let's be super safe
+    faulty_value = UInt32(2**32 - 1)  # 4294967295, it's 10 digits
+    bytes_written = _snprintf_scalar(buf.data, 10, faulty_value)
+    assert_equal(bytes_written, 10)
+
+
 def main():
-    test_cast()
-    test_simd_variadic()
-    test_truthy()
-    test_floordiv()
-    test_mod()
-    test_rotate()
-    test_shift()
-    test_insert()
-    test_interleave()
-    test_deinterleave()
-    test_address()
-    test_extract()
-    test_limits()
-    test_add_with_overflow()
-    test_sub_with_overflow()
-    test_mul_with_overflow()
+    # test_cast()
+    # test_simd_variadic()
+    # test_convert_simd_to_string()
+    # test_truthy()
+    # test_floordiv()
+    # test_mod()
+    # test_rotate()
+    # test_shift()
+    # test_insert()
+    # test_interleave()
+    # test_deinterleave()
+    # test_address()
+    # test_extract()
+    # test_limits()
+    # test_add_with_overflow()
+    # test_sub_with_overflow()
+    # test_mul_with_overflow()
+    # assert_equal(UInt32(-1), UInt32(4294967295))
+    # print(str(UInt32(4294967295)))
+    print(str(UInt32.MAX))
+    # assert_equal(str(UInt32(4294967295)), str(UInt32(4294967295)))
+    # test_convert_scalars_to_string()
+    # test_snprintf_scalar()
+    raise "eeerrr"

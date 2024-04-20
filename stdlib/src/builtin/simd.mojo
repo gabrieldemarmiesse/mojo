@@ -520,7 +520,7 @@ struct SIMD[type: DType, size: Int = simdwidthof[type]()](
         Returns:
             A string representation.
         """
-
+        print("__str__ called")
         # Reserve space for opening and closing brackets, plus each element and
         # its trailing commas.
         var buf = String._buffer_type()
@@ -534,17 +534,19 @@ struct SIMD[type: DType, size: Int = simdwidthof[type]()](
         if size > 1:
             buf.size += _snprintf(buf.data, 2, "[")
         # Print each element.
+        print("size", size)
         for i in range(size):
             var element = self[i]
             # Print separators between each element.
             if i != 0:
                 buf.size += _snprintf(buf.data + buf.size, 3, ", ")
-
-            buf.size += _snprintf_scalar[type](
+            var additional_size = _snprintf_scalar[type](
                 buf.data + buf.size,
                 _calc_initial_buffer_size(element),
                 element,
             )
+            print("additional_size", additional_size)
+            buf.size += additional_size
 
         # Print a closing `]`.
         @parameter
@@ -552,6 +554,18 @@ struct SIMD[type: DType, size: Int = simdwidthof[type]()](
             buf.size += _snprintf(buf.data + buf.size, 2, "]")
 
         buf.size += 1  # for the null terminator.
+        var incorrect_buffer = False
+        for i in range(buf.size - 1):
+            if buf[i] == 0:
+                print("Found a 0 at position " + str(i))
+                incorrect_buffer = True
+
+        if incorrect_buffer:
+            print(__type_of(buf).__str__(buf))
+            print("len", len(buf))
+            print("capacity", buf.capacity)
+            print("reserved", initial_buffer_size)
+
         return String(buf^)
 
     @always_inline("nodebug")

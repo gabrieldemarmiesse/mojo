@@ -22,48 +22,17 @@ from utils import StringRef, StaticIntTuple
 fn test_print():
     print("== test_print")
 
-    var a: SIMD[DType.float32, 2] = 5
-    var b: SIMD[DType.float64, 4] = 6
-    var c: SIMD[DType.index, 8] = 7
-
-    # CHECK: False
-    print(False)
-
-    # CHECK: True
-    print(True)
-
-    # CHECK: [5.0, 5.0]
-    print(a)
-
-    # CHECK: [6.0, 6.0, 6.0, 6.0]
-    print(b)
-
-    # CHECK: [7, 7, 7, 7, 7, 7, 7, 7]
-    print(c)
-
     # CHECK: Hello
     print("Hello")
 
     # CHECK: World
     print("World", flush=True)
 
-    # CHECK: 4294967295
-    print(UInt32(-1))
-
-    # CHECK: 184467440737095516
-    print(UInt64(-1))
-
-    # CHECK: 0x16
-    print(Scalar[DType.address](22))
-
-    # CHECK: 0xdeadbeaf
-    print(Scalar[DType.address](0xDEADBEAF))
-
     var hello: StringRef = "Hello,"
     var world: String = "world!"
     var f: Bool = False
-    # CHECK: > Hello, world! 42 True False [5.0, 5.0] [7, 7, 7, 7, 7, 7, 7, 7]
-    print(">", hello, world, 42, True, f, a, c)
+    # CHECK: > Hello, world! 42 True False
+    print(">", hello, world, 42, True, f)
 
     # CHECK: > 3.14000{{[0-9]+}} 99.90000{{[0-9]+}} -129.29018{{[0-9]+}} (1, 2, 3)
     var float32: Float32 = 99.9

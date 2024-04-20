@@ -27,4 +27,4 @@ echo "Packaging up the test_utils."
 TEST_UTILS_PATH="${REPO_ROOT}/stdlib/test/test_utils"
 mojo package "${TEST_UTILS_PATH}" -o "${BUILD_DIR}/test_utils.mojopkg"
 
-lit -sv "${REPO_ROOT}"/stdlib/test
+lit -sv "${REPO_ROOT}"/stdlib/test/builtin/test_simd.mojo

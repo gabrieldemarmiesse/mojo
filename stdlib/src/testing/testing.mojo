@@ -274,7 +274,7 @@ fn assert_almost_equal[
 fn _assert_equal_error(
     lhs: String, rhs: String, msg: String = ""
 ) raises -> Error:
-    var err = "AssertionError: `left == right` comparison failed:\n   left: " + lhs + "\n  right: " + rhs
+    var err = "AssertionError: `left == right` comparison failed:\n   left: " + lhs + "\n ooooooooooooooooooooooo right: " + rhs
     if msg:
         err += "\n  reason: " + msg
     raise err
