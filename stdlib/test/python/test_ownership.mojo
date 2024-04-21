@@ -15,7 +15,7 @@
 
 from sys import env_get_string
 
-from memory import Pointer
+from memory import LegacyPointer
 from python._cpython import CPython, PyObjectPtr
 from python import PythonObject, Python
 

@@ -153,7 +153,9 @@ struct UnsafePointer[
     @always_inline
     fn free(self):
         """Free the memory referenced by the pointer."""
-        Pointer[Int8, address_space=address_space](address=int(self)).free()
+        LegacyPointer[Int8, address_space=address_space](
+            address=int(self)
+        ).free()
 
     @always_inline("nodebug")
     fn bitcast[

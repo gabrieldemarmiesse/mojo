@@ -14,7 +14,7 @@
 
 from sys import sizeof
 
-from memory import memcmp, memcpy, memset_zero, DTypePointer, Pointer
+from memory import memcmp, memcpy, memset_zero, DTypePointer, LegacyPointer
 from utils._numerics import nan
 from testing import (
     assert_almost_equal,
@@ -40,10 +40,10 @@ def test_memcpy():
     var pair1 = Pair(1, 2)
     var pair2 = Pair(0, 0)
 
-    var src = Pointer.address_of(pair1)
+    var src = LegacyPointer.address_of(pair1)
     var dsrc = DTypePointer[DType.int8](src.bitcast[int8_pop]().address)
 
-    var dest = Pointer.address_of(pair2)
+    var dest = LegacyPointer.address_of(pair2)
     var ddest = DTypePointer[DType.int8](dest.bitcast[int8_pop]().address)
 
     # DTypePointer test
@@ -52,7 +52,7 @@ def test_memcpy():
     assert_equal(pair2.lo, 1)
     assert_equal(pair2.hi, 2)
 
-    # Pointer test
+    # LegacyPointer test
     pair2.lo = 0
     pair2.hi = 0
     memcpy(dest, src, 1)
@@ -117,10 +117,10 @@ def test_memcmp():
     var pair1 = Pair(1, 2)
     var pair2 = Pair(1, 2)
 
-    var ptr1 = Pointer.address_of(pair1)
+    var ptr1 = LegacyPointer.address_of(pair1)
     var dptr1 = DTypePointer[DType.int8](ptr1.bitcast[int8_pop]().address)
 
-    var ptr2 = Pointer.address_of(pair2)
+    var ptr2 = LegacyPointer.address_of(pair2)
     var dptr2 = DTypePointer[DType.int8](ptr2.bitcast[int8_pop]().address)
 
     var errors1 = memcmp(dptr1, dptr2, 1)
@@ -135,8 +135,8 @@ def test_memcmp():
 def test_memcmp_extensive[
     type: DType, extermes: StringLiteral = ""
 ](count: Int):
-    var ptr1 = Pointer[Scalar[type]].alloc(count)
-    var ptr2 = Pointer[Scalar[type]].alloc(count)
+    var ptr1 = LegacyPointer[Scalar[type]].alloc(count)
+    var ptr2 = LegacyPointer[Scalar[type]].alloc(count)
 
     var dptr1 = DTypePointer[type].alloc(count)
     var dptr2 = DTypePointer[type].alloc(count)
@@ -238,7 +238,7 @@ def test_memset():
     print("== test_memset")
     var pair = Pair(1, 2)
 
-    var ptr = Pointer.address_of(pair)
+    var ptr = LegacyPointer.address_of(pair)
     memset_zero(ptr, 1)
 
     assert_equal(pair.lo, 0)
@@ -253,10 +253,10 @@ def test_memset():
 
 
 def test_pointer_string():
-    var nullptr = Pointer[Int]()
+    var nullptr = LegacyPointer[Int]()
     assert_equal(str(nullptr), "0x0")
 
-    var ptr = Pointer[Int].alloc(1)
+    var ptr = LegacyPointer[Int].alloc(1)
     assert_true(str(ptr).startswith("0x"))
     assert_not_equal(str(ptr), "0x0")
     ptr.free()
@@ -273,7 +273,7 @@ def test_dtypepointer_string():
 
 
 def test_pointer_refitem():
-    var ptr = Pointer[Int].alloc(1)
+    var ptr = LegacyPointer[Int].alloc(1)
     ptr[] = 42
     assert_equal(ptr[], 42)
     ptr.free()
@@ -281,7 +281,7 @@ def test_pointer_refitem():
 
 def test_pointer_refitem_string():
     alias payload = "$Modular!Mojo!HelloWorld^"
-    var ptr = Pointer[String].alloc(1)
+    var ptr = LegacyPointer[String].alloc(1)
     __get_address_as_uninit_lvalue(ptr.address) = String()
     ptr[] = payload
     assert_equal(ptr[], payload)
@@ -289,7 +289,7 @@ def test_pointer_refitem_string():
 
 
 def test_pointer_refitem_pair():
-    var ptr = Pointer[Pair].alloc(1)
+    var ptr = LegacyPointer[Pair].alloc(1)
     ptr[].lo = 42
     ptr[].hi = 24
     #   NOTE: We want to write the below but we can't implement a generic assert_equal yet.

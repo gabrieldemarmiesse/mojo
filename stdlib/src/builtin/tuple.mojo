@@ -177,7 +177,7 @@ struct Tuple[*element_types: CollectionElement](Sized, CollectionElement):
             Reference(self_lit)[].storage
         ).get_legacy_pointer().address
 
-        # Pointer to the element.
+        # LegacyPointer to the element.
         var elt_kgen_ptr = __mlir_op.`kgen.pack.gep`[index = idx.value](
             storage_kgen_ptr
         )

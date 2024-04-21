@@ -15,7 +15,7 @@
 You can import these APIs from the `memory` package. For example:
 
 ```mojo
-from memory import Pointer, AnyLifetime
+from memory import LegacyPointer, AnyLifetime
 ```
 """
 
@@ -155,8 +155,6 @@ fn bitcast[
 # LegacyPointer
 # ===----------------------------------------------------------------------===#
 
-alias Pointer = LegacyPointer
-
 
 @value
 @register_passable("trivial")
@@ -223,13 +221,13 @@ struct LegacyPointer[
 
     @always_inline("nodebug")
     fn __init__(*, address: Int) -> Self:
-        """Constructs a Pointer from an address in an integer.
+        """Constructs a LegacyPointer from an address in an integer.
 
         Args:
             address: The input address.
 
         Returns:
-            Constructed Pointer object.
+            Constructed LegacyPointer object.
         """
         return __mlir_op.`pop.index_to_pointer`[_type = Self._mlir_type](
             Scalar[DType.index](address).value
@@ -523,7 +521,7 @@ struct LegacyPointer[
         return int(self) < int(rhs)
 
     # ===------------------------------------------------------------------=== #
-    # Pointer Arithmetic
+    # LegacyPointer Arithmetic
     # ===------------------------------------------------------------------=== #
 
     @always_inline("nodebug")
@@ -616,7 +614,7 @@ struct DTypePointer[
     """
 
     alias element_type = Scalar[type]
-    alias _mlir_type = Pointer[Scalar[type], address_space]
+    alias _mlir_type = LegacyPointer[Scalar[type], address_space]
     var address: Self._mlir_type
     """The pointed-to address."""
 
@@ -642,12 +640,12 @@ struct DTypePointer[
         Args:
             value: The scalar pointer.
         """
-        self = Pointer[
+        self = LegacyPointer[
             __mlir_type[`!pop.scalar<`, type.value, `>`], address_space
         ](value).bitcast[Scalar[type]]()
 
     @always_inline("nodebug")
-    fn __init__(inout self, value: Pointer[Scalar[type], address_space]):
+    fn __init__(inout self, value: LegacyPointer[Scalar[type], address_space]):
         """Constructs a `DTypePointer` from a scalar pointer of the same type.
 
         Args:
@@ -845,7 +843,7 @@ struct DTypePointer[
         return self.address.bitcast[SIMD[new_type, 1], address_space]()
 
     @always_inline("nodebug")
-    fn _as_scalar_pointer(self) -> Pointer[Scalar[type], address_space]:
+    fn _as_scalar_pointer(self) -> LegacyPointer[Scalar[type], address_space]:
         """Converts the `DTypePointer` to a scalar pointer of the same dtype.
 
         Returns:
@@ -875,7 +873,7 @@ struct DTypePointer[
     fn load[
         *, width: Int = 1, alignment: Int = Self._default_alignment
     ](self) -> SIMD[type, width]:
-        """Loads the value the Pointer object points to.
+        """Loads the value the LegacyPointer object points to.
 
         Constraints:
             The width and alignment must be positive integer values.
@@ -893,7 +891,7 @@ struct DTypePointer[
     fn load[
         T: Intable, *, width: Int = 1, alignment: Int = Self._default_alignment
     ](self, offset: T) -> SIMD[type, width]:
-        """Loads the value the Pointer object points to with the given offset.
+        """Loads the value the LegacyPointer object points to with the given offset.
 
         Constraints:
             The width and alignment must be positive integer values.
@@ -1221,7 +1219,7 @@ struct DTypePointer[
         return int(self) % alignment == 0
 
     # ===------------------------------------------------------------------=== #
-    # Pointer Arithmetic
+    # LegacyPointer Arithmetic
     # ===------------------------------------------------------------------=== #
 
     @always_inline("nodebug")

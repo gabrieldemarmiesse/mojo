@@ -20,9 +20,8 @@ from os import Atomic
 from sys.intrinsics import _type_is_eq
 
 
-from memory import memcmp, memcpy, DTypePointer, Pointer
+from memory import memcmp, memcpy, DTypePointer, LegacyPointer
 from memory._arc import Arc
-from memory.unsafe import LegacyPointer
 
 
 from utils import StringRef, unroll

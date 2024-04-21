@@ -247,18 +247,18 @@ struct Reference[
         """
         return self.value
 
-    # FIXME: This should be on Pointer, but can't due to AnyRefType vs AnyType
+    # FIXME: This should be on LegacyPointer, but can't due to AnyRefType vs AnyType
     # disagreement.  Use UnsafePointer instead!
     @always_inline("nodebug")
-    fn get_legacy_pointer(self) -> Pointer[type, address_space]:
-        """Constructs a Pointer from a safe reference.
+    fn get_legacy_pointer(self) -> LegacyPointer[type, address_space]:
+        """Constructs a LegacyPointer from a safe reference.
 
         Returns:
-            Constructed Pointer object.
+            Constructed LegacyPointer object.
         """
         # Work around AnyRegType vs AnyType.
         return __mlir_op.`pop.pointer.bitcast`[
-            _type = Pointer[type, address_space]._mlir_type
+            _type = LegacyPointer[type, address_space]._mlir_type
         ](UnsafePointer(self).value)
 
     @always_inline("nodebug")

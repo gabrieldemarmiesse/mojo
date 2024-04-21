@@ -26,7 +26,7 @@ from .unsafe_pointer import (
 
 from .unsafe import (
     bitcast,
-    Pointer,
+    LegacyPointer,
     LegacyPointer,
     DTypePointer,
 )

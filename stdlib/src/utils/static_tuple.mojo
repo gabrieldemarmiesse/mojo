@@ -19,7 +19,7 @@ from utils import StaticTuple
 ```
 """
 
-from memory import Pointer
+from memory import LegacyPointer
 
 from utils import unroll
 
@@ -55,7 +55,7 @@ fn _set_array_elem[
     var ptr = __mlir_op.`pop.array.gep`(
         array.get_legacy_pointer().address, index.value
     )
-    Pointer(ptr).store(val)
+    LegacyPointer(ptr).store(val)
 
 
 @always_inline
@@ -215,9 +215,9 @@ struct StaticTuple[element_type: AnyRegType, size: Int](Sized):
         # address of 'self' in a non-mutating method.
         var arrayCopy = self.array
         var ptr = __mlir_op.`pop.array.gep`(
-            Pointer.address_of(arrayCopy).address, offset.value
+            LegacyPointer.address_of(arrayCopy).address, offset.value
         )
-        return Pointer(ptr).load()
+        return LegacyPointer(ptr).load()
 
     @always_inline("nodebug")
     fn __setitem__[
@@ -236,7 +236,7 @@ struct StaticTuple[element_type: AnyRegType, size: Int](Sized):
         debug_assert(offset < size, "index must be within bounds")
         var tmp = self
         var ptr = __mlir_op.`pop.array.gep`(
-            Pointer.address_of(tmp.array).address, offset.value
+            LegacyPointer.address_of(tmp.array).address, offset.value
         )
-        Pointer(ptr).store(val)
+        LegacyPointer(ptr).store(val)
         self = tmp

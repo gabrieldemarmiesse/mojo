@@ -14,7 +14,7 @@
 
 from sys.ffi import _get_global
 
-from memory import Pointer
+from memory import LegacyPointer
 from testing import assert_equal, assert_false, assert_true
 
 from utils import Variant
@@ -37,7 +37,7 @@ struct TestCounter(CollectionElement):
         self.moved = other.moved + 1
 
 
-fn _poison_ptr() -> Pointer[Bool]:
+fn _poison_ptr() -> LegacyPointer[Bool]:
     var ptr = _get_global[
         "TEST_VARIANT_POISON", _initialize_poison, _destroy_poison
     ]()
@@ -48,13 +48,15 @@ fn assert_no_poison() raises:
     assert_false(_poison_ptr().load())
 
 
-fn _initialize_poison(payload: Pointer[NoneType]) -> Pointer[NoneType]:
-    var poison = Pointer[Bool].alloc(1)
+fn _initialize_poison(
+    payload: LegacyPointer[NoneType],
+) -> LegacyPointer[NoneType]:
+    var poison = LegacyPointer[Bool].alloc(1)
     poison.store(False)
     return poison.bitcast[NoneType]()
 
 
-fn _destroy_poison(p: Pointer[NoneType]):
+fn _destroy_poison(p: LegacyPointer[NoneType]):
     p.free()
 
 
@@ -123,7 +125,7 @@ def test_move():
 
 @value
 struct ObservableDel(CollectionElement):
-    var target: Pointer[Bool]
+    var target: LegacyPointer[Bool]
 
     fn __del__(owned self):
         self.target.store(True)
@@ -132,7 +134,9 @@ struct ObservableDel(CollectionElement):
 def test_del():
     alias TestDeleterVariant = Variant[ObservableDel, Poison]
     var deleted: Bool = False
-    var v1 = TestDeleterVariant(ObservableDel(Pointer.address_of(deleted)))
+    var v1 = TestDeleterVariant(
+        ObservableDel(LegacyPointer.address_of(deleted))
+    )
     _ = v1^  # call __del__
     assert_true(deleted)
     # test that we didn't call the other deleter too!
@@ -143,8 +147,10 @@ def test_set_calls_deleter():
     alias TestDeleterVariant = Variant[ObservableDel, Poison]
     var deleted: Bool = False
     var deleted2: Bool = False
-    var v1 = TestDeleterVariant(ObservableDel(Pointer.address_of(deleted)))
-    v1.set[ObservableDel](ObservableDel(Pointer.address_of(deleted2)))
+    var v1 = TestDeleterVariant(
+        ObservableDel(LegacyPointer.address_of(deleted))
+    )
+    v1.set[ObservableDel](ObservableDel(LegacyPointer.address_of(deleted2)))
     assert_true(deleted)
     assert_false(deleted2)
     _ = v1^
@@ -156,7 +162,9 @@ def test_set_calls_deleter():
 def test_take_doesnt_call_deleter():
     alias TestDeleterVariant = Variant[ObservableDel, Poison]
     var deleted: Bool = False
-    var v1 = TestDeleterVariant(ObservableDel(Pointer.address_of(deleted)))
+    var v1 = TestDeleterVariant(
+        ObservableDel(LegacyPointer.address_of(deleted))
+    )
     assert_false(deleted)
     var v2 = v1.take[ObservableDel]()
     assert_false(deleted)

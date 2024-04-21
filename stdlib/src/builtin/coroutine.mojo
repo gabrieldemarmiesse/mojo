@@ -17,7 +17,7 @@ These are Mojo built-ins, so you don't need to import them.
 
 from sys import sizeof
 
-from memory import Pointer
+from memory import LegacyPointer
 
 # ===----------------------------------------------------------------------=== #
 # _CoroutineContext
@@ -32,7 +32,7 @@ struct _CoroutineContext:
     interpretations of the payload, but which nevertheless be the same size
     and contain the resume function and a payload pointer."""
 
-    alias _opaque_handle = Pointer[__mlir_type.i8]
+    alias _opaque_handle = LegacyPointer[__mlir_type.i8]
     # Passed the coroutine being completed and its context's payload.
     alias _resume_fn_type = fn (
         Self._opaque_handle, Self._opaque_handle
@@ -87,14 +87,14 @@ struct Coroutine[type: AnyRegType]:
     var _handle: Self._handle_type
 
     @always_inline
-    fn _get_promise(self) -> Pointer[type]:
+    fn _get_promise(self) -> LegacyPointer[type]:
         """Return the pointer to the beginning of the memory where the async
         function results are stored.
 
         Returns:
             The coroutine promise.
         """
-        var promise: Pointer[
+        var promise: LegacyPointer[
             Self._promise_type
         ] = __mlir_op.`pop.coroutine.promise`(self._handle)
         return promise.bitcast[type]()
@@ -109,7 +109,7 @@ struct Coroutine[type: AnyRegType]:
         return self._get_promise().load()
 
     @always_inline
-    fn _get_ctx[ctx_type: AnyRegType](self) -> Pointer[ctx_type]:
+    fn _get_ctx[ctx_type: AnyRegType](self) -> LegacyPointer[ctx_type]:
         """Returns the pointer to the coroutine context.
 
         Parameters:
@@ -207,14 +207,14 @@ struct RaisingCoroutine[type: AnyRegType]:
     var _handle: Self._handle_type
 
     @always_inline
-    fn _get_promise(self) -> Pointer[Self._var_type]:
+    fn _get_promise(self) -> LegacyPointer[Self._var_type]:
         """Return the pointer to the beginning of the memory where the async
         function results are stored.
 
         Returns:
             The coroutine promise.
         """
-        var promise: Pointer[
+        var promise: LegacyPointer[
             Self._promise_type
         ] = __mlir_op.`pop.coroutine.promise`(self._handle)
         return promise.bitcast[Self._var_type]()
@@ -232,7 +232,7 @@ struct RaisingCoroutine[type: AnyRegType]:
         return __mlir_op.`kgen.variant.take`[index = Int(1).value](variant)
 
     @always_inline
-    fn _get_ctx[ctx_type: AnyRegType](self) -> Pointer[ctx_type]:
+    fn _get_ctx[ctx_type: AnyRegType](self) -> LegacyPointer[ctx_type]:
         """Returns the pointer to the coroutine context.
 
         Parameters:
