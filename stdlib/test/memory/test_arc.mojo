@@ -27,7 +27,7 @@ def test_basic():
 
 @value
 struct ObservableDel(CollectionElement):
-    var target: LegacyPointer[Bool]
+    var target: Pointer[Bool]
 
     fn __del__(owned self):
         self.target.store(True)
@@ -35,7 +35,7 @@ struct ObservableDel(CollectionElement):
 
 def test_deleter_not_called_until_no_references():
     var deleted = False
-    var p = Arc(ObservableDel(LegacyPointer.address_of(deleted)))
+    var p = Arc(ObservableDel(Pointer.address_of(deleted)))
     var p2 = p
     _ = p^
     assert_false(deleted)

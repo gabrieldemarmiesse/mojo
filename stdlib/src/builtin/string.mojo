@@ -18,7 +18,7 @@ These are Mojo built-ins, so you don't need to import them.
 from collections import List, KeyElement
 from sys import llvm_intrinsic, bitwidthof
 
-from memory import DTypePointer, LegacyPointer, UnsafePointer, memcmp, memcpy
+from memory import DTypePointer, Pointer, UnsafePointer, memcmp, memcpy
 
 
 from utils import StringRef, StaticIntTuple, StaticTuple
@@ -400,7 +400,7 @@ struct String(Sized, Stringable, IntableRaising, KeyElement, Boolable):
         self = str(value)
 
     @always_inline
-    fn __init__(inout self, ptr: LegacyPointer[Int8], len: Int):
+    fn __init__(inout self, ptr: Pointer[Int8], len: Int):
         """Creates a string from the buffer. Note that the string now owns
         the buffer.
 
@@ -614,12 +614,10 @@ struct String(Sized, Stringable, IntableRaising, KeyElement, Boolable):
         var buffer = Self._buffer_type()
         buffer.resize(total_len + 1, 0)
         memcpy(
-            rebind[LegacyPointer[Int8]](buffer.data),
-            self._as_ptr().address,
-            self_len,
+            rebind[Pointer[Int8]](buffer.data), self._as_ptr().address, self_len
         )
         memcpy(
-            rebind[LegacyPointer[Int8]](buffer.data + self_len),
+            rebind[Pointer[Int8]](buffer.data + self_len),
             other._as_ptr().address,
             other_len + 1,  # Also copy the terminator
         )

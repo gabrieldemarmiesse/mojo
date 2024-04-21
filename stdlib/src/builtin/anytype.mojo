@@ -43,11 +43,11 @@ trait AnyType:
     ```mojo
     @value
     struct Foo(AnyType):
-        var p: LegacyPointer[Int]
+        var p: Pointer[Int]
         var size: Int
 
         fn __init__(inout self, size: Int):
-            self.p = LegacyPointer[Int].alloc(size)
+            self.p = Pointer[Int].alloc(size)
             self.size = size
 
         fn __del__(owned self):

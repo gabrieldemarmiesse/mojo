@@ -430,7 +430,7 @@ struct _ArrayMem[ElementType: AnyRegType, SIZE: Int](Sized):
     # Methods
     # ===------------------------------------------------------------------=== #
 
-    fn as_ptr(self) -> LegacyPointer[ElementType]:
+    fn as_ptr(self) -> Pointer[ElementType]:
         """Get a pointer to the elements contained by this array.
 
         Returns:
@@ -441,7 +441,7 @@ struct _ArrayMem[ElementType: AnyRegType, SIZE: Int](Sized):
             self.storage.array
         ).get_legacy_pointer().address
 
-        # var base_ptr = LegacyPointer[ElementType].address_of(self.array).address
+        # var base_ptr = Pointer[ElementType].address_of(self.array).address
         # TODO: Is the `gep` here necessary, or could this be a bitcast?
         var ptr = __mlir_op.`pop.array.gep`(base_ptr, Int(0).value)
-        return LegacyPointer(ptr)
+        return Pointer(ptr)

@@ -23,7 +23,7 @@ from collections import List
 from sys import os_is_linux, os_is_windows, triple_is_nvidia_cuda
 
 from memory.unsafe_pointer import move_from_pointee
-from memory import DTypePointer, LegacyPointer
+from memory import DTypePointer, Pointer
 
 from utils import StringRef
 
@@ -69,7 +69,7 @@ struct _dirent_macos:
     """Name of entry."""
 
 
-fn _strnlen(ptr: LegacyPointer[Int8], max: Int) -> Int:
+fn _strnlen(ptr: Pointer[Int8], max: Int) -> Int:
     var len = 0
     while len < max and ptr.load(len):
         len += 1
@@ -79,7 +79,7 @@ fn _strnlen(ptr: LegacyPointer[Int8], max: Int) -> Int:
 struct _DirHandle:
     """Handle to an open directory descriptor opened via opendir."""
 
-    var _handle: LegacyPointer[NoneType]
+    var _handle: Pointer[NoneType]
 
     fn __init__(inout self, path: String) raises:
         """Construct the _DirHandle using the path provided.
@@ -94,7 +94,7 @@ struct _DirHandle:
         if not isdir(path):
             raise "the directory '" + path + "' does not exist"
 
-        self._handle = external_call["opendir", LegacyPointer[NoneType]](
+        self._handle = external_call["opendir", Pointer[NoneType]](
             path._as_ptr()
         )
 
@@ -127,13 +127,13 @@ struct _DirHandle:
         var res = List[String]()
 
         while True:
-            var ep = external_call["readdir", LegacyPointer[_dirent_linux]](
+            var ep = external_call["readdir", Pointer[_dirent_linux]](
                 self._handle
             )
             if not ep:
                 break
             var name = ep.load().name
-            var name_ptr = LegacyPointer.address_of(name).bitcast[Int8]()
+            var name_ptr = Pointer.address_of(name).bitcast[Int8]()
             var name_str = StringRef(
                 name_ptr, _strnlen(name_ptr, _dirent_linux.MAX_NAME_SIZE)
             )
@@ -152,13 +152,13 @@ struct _DirHandle:
         var res = List[String]()
 
         while True:
-            var ep = external_call["readdir", LegacyPointer[_dirent_macos]](
+            var ep = external_call["readdir", Pointer[_dirent_macos]](
                 self._handle
             )
             if not ep:
                 break
             var name = ep.load().name
-            var name_ptr = LegacyPointer.address_of(name).bitcast[Int8]()
+            var name_ptr = Pointer.address_of(name).bitcast[Int8]()
             var name_str = StringRef(
                 name_ptr, _strnlen(name_ptr, _dirent_macos.MAX_NAME_SIZE)
             )
@@ -266,7 +266,7 @@ fn remove(path: String) raises:
     if error != 0:
         # TODO get error message, the following code prints it
         # var error_str = String("Something went wrong")
-        # _ = external_call["perror", LegacyPointer[NoneType]](error_str._as_ptr())
+        # _ = external_call["perror", Pointer[NoneType]](error_str._as_ptr())
         # _ = error_str
         raise Error("Can not remove file: " + path)
 

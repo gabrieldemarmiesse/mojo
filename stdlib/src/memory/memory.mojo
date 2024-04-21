@@ -24,7 +24,7 @@ from sys import llvm_intrinsic, sizeof, triple_is_nvidia_cuda
 from builtin.dtype import _integral_type_of
 
 from memory.reference import AddressSpace, _GPUAddressSpace
-from .unsafe import DTypePointer, LegacyPointer
+from .unsafe import DTypePointer, Pointer
 
 # ===----------------------------------------------------------------------=== #
 # Utilities
@@ -115,8 +115,8 @@ fn memcmp(s1: DTypePointer, s2: __type_of(s1), count: Int) -> Int:
 fn memcmp[
     type: AnyRegType, address_space: AddressSpace
 ](
-    s1: LegacyPointer[type, address_space],
-    s2: LegacyPointer[type, address_space],
+    s1: Pointer[type, address_space],
+    s2: Pointer[type, address_space],
     count: Int,
 ) -> Int:
     """Compares two buffers. Both strings are assumed to be of the same length.
@@ -154,7 +154,7 @@ fn memcmp[
 
 
 @always_inline
-fn memcpy[count: Int](dest: LegacyPointer, src: __type_of(dest)):
+fn memcpy[count: Int](dest: Pointer, src: __type_of(dest)):
     """Copies a memory area.
 
     Parameters:
@@ -223,7 +223,7 @@ fn memcpy[count: Int](dest: DTypePointer, src: __type_of(dest)):
 
 
 @always_inline
-fn memcpy(dest: LegacyPointer, src: __type_of(dest), count: Int):
+fn memcpy(dest: Pointer, src: __type_of(dest), count: Int):
     """Copies a memory area.
 
     Args:
@@ -306,7 +306,7 @@ fn memcpy(dest: DTypePointer, src: __type_of(dest), count: Int):
 @always_inline("nodebug")
 fn _memset_llvm[
     address_space: AddressSpace
-](ptr: LegacyPointer[UInt8, address_space], value: UInt8, count: Int):
+](ptr: Pointer[UInt8, address_space], value: UInt8, count: Int):
     llvm_intrinsic["llvm.memset", NoneType](
         ptr.address, value, count.value, False
     )
@@ -323,7 +323,7 @@ fn memset[
         address_space: The address space of the pointer.
 
     Args:
-        ptr: LegacyPointer to the beginning of the memory block to fill.
+        ptr: Pointer to the beginning of the memory block to fill.
         value: The value to fill with.
         count: Number of elements to fill (in elements, not bytes).
     """
@@ -333,7 +333,7 @@ fn memset[
 @always_inline
 fn memset[
     type: AnyRegType, address_space: AddressSpace
-](ptr: LegacyPointer[type, address_space], value: UInt8, count: Int):
+](ptr: Pointer[type, address_space], value: UInt8, count: Int):
     """Fills memory with the given value.
 
     Parameters:
@@ -341,7 +341,7 @@ fn memset[
         address_space: The address space of the pointer.
 
     Args:
-        ptr: LegacyPointer to the beginning of the memory block to fill.
+        ptr: Pointer to the beginning of the memory block to fill.
         value: The value to fill with.
         count: Number of elements to fill (in elements, not bytes).
     """
@@ -364,7 +364,7 @@ fn memset_zero[
         address_space: The address space of the pointer.
 
     Args:
-        ptr: LegacyPointer to the beginning of the memory block to fill.
+        ptr: Pointer to the beginning of the memory block to fill.
         count: Number of elements to set (in elements, not bytes).
     """
     memset(ptr, 0, count)
@@ -373,7 +373,7 @@ fn memset_zero[
 @always_inline
 fn memset_zero[
     type: AnyRegType, address_space: AddressSpace
-](ptr: LegacyPointer[type, address_space], count: Int):
+](ptr: Pointer[type, address_space], count: Int):
     """Fills memory with zeros.
 
     Parameters:
@@ -381,7 +381,7 @@ fn memset_zero[
         address_space: The address space of the pointer.
 
     Args:
-        ptr: LegacyPointer to the beginning of the memory block to fill.
+        ptr: Pointer to the beginning of the memory block to fill.
         count: Number of elements to fill (in elements, not bytes).
     """
     memset(ptr, 0, count)
@@ -425,7 +425,7 @@ fn stack_allocation[
     /,
     alignment: Int = 1,
     address_space: AddressSpace = AddressSpace.GENERIC,
-]() -> LegacyPointer[type, address_space]:
+]() -> Pointer[type, address_space]:
     """Allocates data buffer space on the stack given a data type and number of
     elements.
 
@@ -443,14 +443,14 @@ fn stack_allocation[
     if triple_is_nvidia_cuda() and address_space == _GPUAddressSpace.SHARED:
         return __mlir_op.`pop.global_alloc`[
             count = count.value,
-            _type = LegacyPointer[type, address_space]._mlir_type,
+            _type = Pointer[type, address_space]._mlir_type,
             alignment = alignment.value,
             address_space = address_space._value.value,
         ]()
     else:
         return __mlir_op.`pop.stack_allocation`[
             count = count.value,
-            _type = LegacyPointer[type, address_space]._mlir_type,
+            _type = Pointer[type, address_space]._mlir_type,
             alignment = alignment.value,
             address_space = address_space._value.value,
         ]()
@@ -467,19 +467,19 @@ fn _malloc[
     /,
     *,
     address_space: AddressSpace = AddressSpace.GENERIC,
-](size: Int, /, *, alignment: Int = -1) -> LegacyPointer[type, address_space]:
+](size: Int, /, *, alignment: Int = -1) -> Pointer[type, address_space]:
     @parameter
     if triple_is_nvidia_cuda():
         constrained[
             address_space == AddressSpace.GENERIC,
             "address space must be generic",
         ]()
-        return external_call["malloc", LegacyPointer[NoneType, address_space]](
+        return external_call["malloc", Pointer[NoneType, address_space]](
             size
         ).bitcast[type]()
     else:
         return __mlir_op.`pop.aligned_alloc`[
-            _type = LegacyPointer[type, address_space]._mlir_type
+            _type = Pointer[type, address_space]._mlir_type
         ](alignment.value, size.value)
 
 
@@ -489,7 +489,7 @@ fn _malloc[
 
 
 @always_inline
-fn _free(ptr: LegacyPointer):
+fn _free(ptr: Pointer):
     @parameter
     if triple_is_nvidia_cuda():
         constrained[

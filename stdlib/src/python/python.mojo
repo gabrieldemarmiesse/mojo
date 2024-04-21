@@ -22,7 +22,7 @@ from python import Python
 from sys import external_call, sizeof
 from sys.ffi import _get_global
 
-from memory import LegacyPointer
+from memory import Pointer
 
 from utils import StringRef
 
@@ -30,13 +30,13 @@ from ._cpython import CPython, Py_eval_input
 from .object import PythonObject
 
 
-fn _init_global(ignored: LegacyPointer[NoneType]) -> LegacyPointer[NoneType]:
-    var ptr = LegacyPointer[CPython].alloc(1)
+fn _init_global(ignored: Pointer[NoneType]) -> Pointer[NoneType]:
+    var ptr = Pointer[CPython].alloc(1)
     ptr[] = CPython()
     return ptr.bitcast[NoneType]()
 
 
-fn _destroy_global(python: LegacyPointer[NoneType]):
+fn _destroy_global(python: Pointer[NoneType]):
     var p = python.bitcast[CPython]()
     CPython.destroy(p[])
     python.free()
@@ -49,9 +49,9 @@ fn _get_global_python_itf() -> _PythonInterfaceImpl:
 
 
 struct _PythonInterfaceImpl:
-    var _cpython: LegacyPointer[CPython]
+    var _cpython: Pointer[CPython]
 
-    fn __init__(inout self, cpython: LegacyPointer[CPython]):
+    fn __init__(inout self, cpython: Pointer[CPython]):
         self._cpython = cpython
 
     fn __copyinit__(inout self, existing: Self):

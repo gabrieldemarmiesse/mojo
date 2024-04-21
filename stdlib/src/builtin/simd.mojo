@@ -1494,7 +1494,7 @@ struct SIMD[type: DType, size: Int = simdwidthof[type]()](
                     "invalid index in the shuffle operation",
                 ]()
                 var ptr = __mlir_op.`pop.array.gep`(
-                    LegacyPointer.address_of(array).address, idx.value
+                    Pointer.address_of(array).address, idx.value
                 )
                 __mlir_op.`pop.store`(val, ptr)
 
