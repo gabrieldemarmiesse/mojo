@@ -434,7 +434,7 @@ struct String(
 ):
     """Represents a mutable string."""
 
-    alias _buffer_type = List[Int8]
+    alias _buffer_type = _BytesListWithSmallSizeOptimization
     var _buffer: Self._buffer_type
     """The underlying storage for the string."""
 
@@ -459,7 +459,7 @@ struct String(
 
     # TODO: Remove this method when #2317 is done
     @always_inline
-    fn __init__(inout self, owned impl: Self._buffer_type):
+    fn __init__(inout self, owned impl: List[Int8]):
         """Construct a string from a buffer of bytes.
 
         The buffer must be terminated with a null byte:
@@ -484,7 +484,7 @@ struct String(
             impl[-1] == 0,
             "expected last element of String buffer to be null terminator",
         )
-        self._buffer = impl^
+        self._buffer = _BytesListWithSmallSizeOptimization(impl^)
 
     @always_inline
     fn __init__(inout self, owned impl: List[UInt8]):
@@ -520,6 +520,15 @@ struct String(
         self._buffer = Self._buffer_type()
 
     @always_inline
+    fn __init__(inout self, *, owned _buffer: Self._buffer_type[24]):
+        """Private constructor, do not use.
+
+        Args:
+            _buffer: The buffer.
+        """
+        self._buffer = _buffer^
+
+    @always_inline
     fn __init__(inout self, str: StringRef):
         """Construct a string from a StringRef object.
 
@@ -529,7 +538,13 @@ struct String(
         var length = len(str)
         var buffer = Self._buffer_type()
         buffer.resize(length + 1, 0)
-        memcpy(rebind[DTypePointer[DType.int8]](buffer.data), str.data, length)
+        memcpy(
+            rebind[DTypePointer[DType.int8]](
+                buffer.get_storage_unsafe_pointer()
+            ),
+            str.data,
+            length,
+        )
         buffer[length] = 0
         self._buffer = buffer^
 
@@ -574,7 +589,9 @@ struct String(
         """
         # we don't know the capacity of ptr, but we'll assume it's the same or
         # larger than len
-        self = Self(Self._buffer_type(ptr, size=len, capacity=len))
+        self._buffer = Self._buffer_type(
+            unsafe_pointer=ptr, size=len, capacity=len
+        )
 
     @always_inline
     fn __init__(inout self, ptr: UnsafePointer[UInt8], len: Int):
@@ -589,8 +606,8 @@ struct String(
         """
         # we don't know the capacity of ptr, but we'll assume it's the same or
         # larger than len
-        self = Self(
-            Self._buffer_type(ptr.bitcast[Int8](), size=len, capacity=len)
+        self._buffer = Self._buffer_type(
+            unsafe_pointer=ptr.bitcast[Int8](), size=len, capacity=len
         )
 
     @always_inline
@@ -604,9 +621,11 @@ struct String(
             ptr: The pointer to the buffer.
             len: The length of the buffer, including the null terminator.
         """
-        self._buffer = Self._buffer_type()
-        self._buffer.data = rebind[UnsafePointer[Int8]](ptr)
-        self._buffer.size = len
+        self._buffer = Self._buffer_type(
+            unsafe_pointer=rebind[UnsafePointer[Int8]](ptr),
+            size=len,
+            capacity=len,
+        )
 
     @always_inline
     fn __init__(inout self, ptr: DTypePointer[DType.int8], len: Int):
@@ -639,37 +658,6 @@ struct String(
         """
         self._buffer = existing._buffer^
 
-    @staticmethod
-    @always_inline
-    fn _from_bytes(owned buff: DTypePointer[DType.int8]) -> String:
-        """Construct a string from a sequence of bytes.
-
-        This does no validation that the given bytes are valid in any specific
-        String encoding.
-
-        Args:
-            buff: The buffer. This should have an existing terminator.
-        """
-
-        return String(buff, len(StringRef(buff)) + 1)
-
-    @staticmethod
-    fn _from_bytes(owned buff: Self._buffer_type) -> String:
-        """Construct a string from a sequence of bytes.
-
-        This does no validation that the given bytes are valid in any specific
-        String encoding.
-
-        Args:
-            buff: The buffer.
-        """
-
-        # If a terminator does not already exist, then add it.
-        if buff[-1]:
-            buff.append(0)
-
-        return String(buff^)
-
     # ===------------------------------------------------------------------===#
     # Operator dunders
     # ===------------------------------------------------------------------===#
@@ -699,7 +687,7 @@ struct String(
         var buf = Self._buffer_type(capacity=1)
         buf.append(self._buffer[idx])
         buf.append(0)
-        return String(buf^)
+        return String(_buffer=buf^)
 
     @always_inline
     fn _adjust_span(self, span: Slice) -> Slice:
@@ -735,7 +723,7 @@ struct String(
         var adjusted_span = self._adjust_span(span)
         if adjusted_span.step == 1:
             return StringRef(
-                self._buffer.data + span.start,
+                self._buffer.get_storage_unsafe_pointer() + span.start,
                 len(adjusted_span),
             )
 
@@ -746,7 +734,7 @@ struct String(
         for i in range(adjusted_span_len):
             buffer[i] = ptr[adjusted_span[i]]
         buffer[adjusted_span_len] = 0
-        return Self(buffer^)
+        return Self(_buffer=buffer^)
 
     @always_inline
     fn __len__(self) -> Int:
@@ -812,16 +800,16 @@ struct String(
         var buffer = Self._buffer_type()
         buffer.resize(total_len + 1, 0)
         memcpy(
-            DTypePointer(buffer.data),
+            DTypePointer(buffer.get_storage_unsafe_pointer()),
             self._as_ptr(),
             self_len,
         )
         memcpy(
-            DTypePointer(buffer.data + self_len),
+            DTypePointer(buffer.get_storage_unsafe_pointer() + self_len),
             other._as_ptr(),
             other_len + 1,  # Also copy the terminator
         )
-        return Self(buffer^)
+        return Self(_buffer=buffer^)
 
     @always_inline
     fn __radd__(self, other: String) -> String:
@@ -1001,7 +989,9 @@ struct String(
         Returns:
             The pointer to the underlying memory.
         """
-        return rebind[DTypePointer[DType.int8]](self._buffer.data)
+        return rebind[DTypePointer[DType.int8]](
+            self._buffer.get_storage_unsafe_pointer()
+        )
 
     fn _as_uint8_ptr(self) -> DTypePointer[DType.uint8]:
         """Retrieves a pointer to the underlying memory.
@@ -1010,10 +1000,10 @@ struct String(
             The pointer to the underlying memory.
         """
         return rebind[DTypePointer[DType.uint8]](
-            self._buffer.data.bitcast[UInt8]()
+            self._buffer.get_storage_unsafe_pointer().bitcast[UInt8]()
         )
 
-    fn as_bytes(self) -> List[Int8]:
+    fn as_bytes(self) -> _BytesListWithSmallSizeOptimization:
         """Retrieves the underlying byte sequence encoding the characters in
         this string.
 
@@ -1032,19 +1022,6 @@ struct String(
         )
 
         return copy
-
-    fn _steal_ptr(inout self) -> DTypePointer[DType.int8]:
-        """Transfer ownership of pointer to the underlying memory.
-        The caller is responsible for freeing up the memory.
-
-        Returns:
-            The pointer to the underlying memory.
-        """
-        var ptr = self._as_ptr()
-        self._buffer.data = UnsafePointer[Int8]()
-        self._buffer.size = 0
-        self._buffer.capacity = 0
-        return ptr
 
     fn count(self, substr: String) -> Int:
         """Return the number of non-overlapping occurrences of substring
@@ -1418,11 +1395,14 @@ struct String(
         buf.resize(count, 0)
         for i in range(n):
             memcpy(
-                rebind[DTypePointer[DType.int8]](buf.data) + len_self * i,
+                rebind[DTypePointer[DType.int8]](
+                    buf.get_storage_unsafe_pointer()
+                )
+                + len_self * i,
                 self._as_ptr(),
                 len_self,
             )
-        return String(buf^)
+        return String(_buffer=buf^)
 
 
 # ===----------------------------------------------------------------------===#
@@ -1556,38 +1536,53 @@ struct _InlineBytesList[capacity: Int](Sized, CollectionElement):
     """This type is similar to `InlineArray` but it has a `List` behavior and interface with a maximum size.
     """
 
-    alias _buffer_type = InlineArray[UInt8, capacity]
+    alias _buffer_type = InlineArray[Int8, capacity]
     var data: Self._buffer_type
-    var lenght: Int
+    var length: Int
 
     @always_inline
     fn __init__(inout self):
         # This could be uninitialized for more speed
-        self.data = InlineArray[UInt8, size=capacity](fill=0)
-        self.lenght = 0
+        self.data = InlineArray[Int8, size=capacity](fill=0)
+        self.length = 0
 
     @always_inline
-    fn append(inout self, value: UInt8):
-        debug_assert(self.lenght < capacity, "buffer is full")
-        self.data[self.lenght] = value
-        self.lenght += 1
+    fn append(inout self, value: Int8):
+        debug_assert(self.length < capacity, "buffer is full")
+        self.data[self.length] = value
+        self.length += 1
 
     @always_inline
-    fn __getitem__(self, idx: Int) -> UInt8:
-        debug_assert(0 <= idx < self.lenght, "index out of range")
+    fn __getitem__(self, idx: Int) -> Int8:
+        debug_assert(0 <= idx < self.length, "index out of range")
         return self.data[idx]
 
     @always_inline
-    fn __setitem__(inout self, idx: Int, value: UInt8):
-        debug_assert(0 <= idx < self.lenght, "index out of range")
+    fn __setitem__(inout self, idx: Int, value: Int8):
+        debug_assert(0 <= idx < self.length, "index out of range")
         self.data[idx] = value
 
     @always_inline
-    fn __len__(self) -> Int:
-        return self.lenght
+    fn pop(inout self) -> Int8:  # might be unused
+        debug_assert(self.length > 0, "pop from empty list")
+        var value_to_pop = self.data[self.length]
+        self.length -= 1
+        return value_to_pop
 
     @always_inline
-    fn get_storage_unsafe_pointer(self) -> UnsafePointer[UInt8]:
+    fn __len__(self) -> Int:
+        return self.length
+
+    fn resize(inout self, new_size: Int, value: Int8):
+        debug_assert(new_size <= capacity, "new size is larger than capacity")
+        if new_size > self.length:
+            for i in range(self.length, new_size):
+                self.append(value)
+        elif new_size < self.length:
+            self.length = new_size
+
+    @always_inline
+    fn get_storage_unsafe_pointer(self) -> UnsafePointer[Int8]:
         return self.data.get_storage_unsafe_pointer()
 
 
@@ -1599,7 +1594,7 @@ struct _BytesListWithSmallSizeOptimization[inline_size: Int = 24](
     """
 
     alias static_storage = _InlineBytesList[Self.inline_size]
-    alias dynamic_storage = List[UInt8]
+    alias dynamic_storage = List[Int8]
 
     var values: Variant[Self.static_storage, Self.dynamic_storage]
 
@@ -1608,6 +1603,18 @@ struct _BytesListWithSmallSizeOptimization[inline_size: Int = 24](
             self.values = Self.static_storage()
         else:
             self.values = Self.dynamic_storage(capacity=capacity)
+
+    fn __init__(inout self, owned list: List[Int8]):
+        self.values = list^
+
+    fn __init__(
+        inout self,
+        *,
+        unsafe_pointer: UnsafePointer[Int8],
+        size: Int,
+        capacity: Int,
+    ):
+        self.values = List[Int8](unsafe_pointer, size=size, capacity=capacity)
 
     @always_inline
     fn _use_sso(self) -> Bool:
@@ -1635,7 +1642,7 @@ struct _BytesListWithSmallSizeOptimization[inline_size: Int = 24](
         new_storage.size = len(self)
         self.values = new_storage^
 
-    fn append(inout self, value: UInt8):
+    fn append(inout self, value: Int8):
         if self._use_sso():
             if len(self) < Self.inline_size:
                 self.values.get[Self.static_storage]()[].append(value)
@@ -1646,24 +1653,48 @@ struct _BytesListWithSmallSizeOptimization[inline_size: Int = 24](
         self.values.get[Self.dynamic_storage]()[].append(value)
 
     @always_inline
-    fn __getitem__(self, idx: Int) -> UInt8:
+    fn __getitem__(self, idx: Int) -> Int8:
         if self._use_sso():
             return self.values.get[Self.static_storage]()[][idx]
         else:
             return self.values.get[Self.dynamic_storage]()[][idx]
 
     @always_inline
-    fn __setitem__(inout self, idx: Int, value: UInt8):
+    fn __setitem__(inout self, idx: Int, value: Int8):
         if self._use_sso():
             self.values.get[Self.static_storage]()[][idx] = value
         else:
             self.values.get[Self.dynamic_storage]()[][idx] = value
 
     @always_inline
-    fn get_storage_unsafe_pointer(self) -> UnsafePointer[UInt8]:
+    fn get_storage_unsafe_pointer(self) -> UnsafePointer[Int8]:
         if self._use_sso():
             return self.values.get[
                 Self.static_storage
             ]()[].get_storage_unsafe_pointer()
         else:
             return self.values.get[Self.dynamic_storage]()[].data
+
+    @always_inline
+    fn resize(inout self, new_size: Int, value: Int8):
+        if self._use_sso():
+            if new_size <= Self.inline_size:
+                self.values.get[Self.static_storage]()[].resize(new_size, value)
+                return
+            else:
+                self._switch_to_dynamic_storage(target_capacity=new_size)
+        self.values.get[Self.dynamic_storage]()[].resize(new_size, value)
+
+    @always_inline
+    fn pop(inout self) -> Int8:
+        if self._use_sso():
+            return self.values.get[Self.static_storage]()[].pop()
+        return self.values.get[Self.dynamic_storage]()[].pop()
+
+    @always_inline
+    fn reserve(inout self, new_capacity: Int):
+        if self._use_sso():
+            if new_capacity <= Self.inline_size:
+                return
+            self._switch_to_dynamic_storage(target_capacity=new_capacity)
+        self.values.get[Self.dynamic_storage]()[].reserve(new_capacity)
