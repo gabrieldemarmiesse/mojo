@@ -518,6 +518,7 @@ struct String(
     fn __init__(inout self):
         """Construct an uninitialized string."""
         self._buffer = Self._buffer_type()
+        self._buffer.append(0)
 
     @always_inline
     fn __init__(inout self, *, owned _buffer: Self._buffer_type[24]):
@@ -526,6 +527,13 @@ struct String(
         Args:
             _buffer: The buffer.
         """
+        debug_assert(
+            len(_buffer) >= 1, "buffer must have at least the null terminator"
+        )
+        debug_assert(
+            _buffer[-1] == 0,
+            "expected last element of String buffer to be null terminator",
+        )
         self._buffer = _buffer^
 
     @always_inline
@@ -1554,7 +1562,8 @@ struct _InlineBytesList[capacity: Int](Sized, CollectionElement):
 
     @always_inline
     fn __getitem__(self, idx: Int) -> Int8:
-        debug_assert(0 <= idx < self.length, "index out of range")
+        # if not (0 <= idx < self.length):
+        #    debug_assert(False, "index" + str(idx) + "is invalid for array of length " + str(self.length))
         return self.data[idx]
 
     @always_inline
