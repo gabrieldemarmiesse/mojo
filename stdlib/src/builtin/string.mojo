@@ -20,7 +20,7 @@ from sys import llvm_intrinsic, bitwidthof
 
 from memory import DTypePointer, LegacyPointer, UnsafePointer, memcmp, memcpy
 
-from utils import StringRef, StaticIntTuple, StaticTuple
+from utils import StringRef, StaticIntTuple, StaticTuple, InlineArray, Variant
 from utils._format import Formattable, Formatter, ToFormatter
 
 from .io import _snprintf
@@ -1549,3 +1549,121 @@ fn _calc_initial_buffer_size[type: DType](n0: Scalar[type]) -> Int:
             )
 
     return 128 + 1  # Add 1 for the terminator
+
+
+@value
+struct _InlineBytesList[capacity: Int](Sized, CollectionElement):
+    """This type is similar to `InlineArray` but it has a `List` behavior and interface with a maximum size.
+    """
+
+    alias _buffer_type = InlineArray[UInt8, capacity]
+    var data: Self._buffer_type
+    var lenght: Int
+
+    @always_inline
+    fn __init__(inout self):
+        # This could be uninitialized for more speed
+        self.data = InlineArray[UInt8, size=capacity](fill=0)
+        self.lenght = 0
+
+    @always_inline
+    fn append(inout self, value: UInt8):
+        debug_assert(self.lenght < capacity, "buffer is full")
+        self.data[self.lenght] = value
+        self.lenght += 1
+
+    @always_inline
+    fn __getitem__(self, idx: Int) -> UInt8:
+        debug_assert(0 <= idx < self.lenght, "index out of range")
+        return self.data[idx]
+
+    @always_inline
+    fn __setitem__(inout self, idx: Int, value: UInt8):
+        debug_assert(0 <= idx < self.lenght, "index out of range")
+        self.data[idx] = value
+
+    @always_inline
+    fn __len__(self) -> Int:
+        return self.lenght
+
+    @always_inline
+    fn get_storage_unsafe_pointer(self) -> UnsafePointer[UInt8]:
+        return self.data.get_storage_unsafe_pointer()
+
+
+@value
+struct _BytesListWithSmallSizeOptimization[inline_size: Int = 24](
+    Sized, CollectionElement
+):
+    """This type looks like a list of bytes, but is stack-allocated if the size is small.
+    """
+
+    alias static_storage = _InlineBytesList[Self.inline_size]
+    alias dynamic_storage = List[UInt8]
+
+    var values: Variant[Self.static_storage, Self.dynamic_storage]
+
+    fn __init__(inout self, capacity: Int = Self.inline_size):
+        if capacity <= Self.inline_size:
+            self.values = Self.static_storage()
+        else:
+            self.values = Self.dynamic_storage(capacity=capacity)
+
+    @always_inline
+    fn _use_sso(self) -> Bool:
+        return self.values.isa[Self.static_storage]()
+
+    fn capacity(self) -> Int:
+        if self._use_sso():
+            return self.values.get[Self.dynamic_storage]()[].capacity
+        return Self.inline_size
+
+    fn __len__(self) -> Int:
+        if self._use_sso():
+            return len(self.values.get[Self.static_storage]()[])
+        return len(self.values.get[Self.dynamic_storage]()[])
+
+    fn _switch_to_dynamic_storage(inout self, target_capacity: Int):
+        var new_storage = Self.dynamic_storage(capacity=target_capacity)
+        memcpy(
+            new_storage.data,
+            self.values.get[
+                Self.static_storage
+            ]()[].get_storage_unsafe_pointer(),
+            len(self),
+        )
+        new_storage.size = len(self)
+        self.values = new_storage^
+
+    fn append(inout self, value: UInt8):
+        if self._use_sso():
+            if len(self) < Self.inline_size:
+                self.values.get[Self.static_storage]()[].append(value)
+                return
+            else:
+                self._switch_to_dynamic_storage(target_capacity=len(self) + 1)
+
+        self.values.get[Self.dynamic_storage]()[].append(value)
+
+    @always_inline
+    fn __getitem__(self, idx: Int) -> UInt8:
+        if self._use_sso():
+            return self.values.get[Self.static_storage]()[][idx]
+        else:
+            return self.values.get[Self.dynamic_storage]()[][idx]
+
+    @always_inline
+    fn __setitem__(inout self, idx: Int, value: UInt8):
+        if self._use_sso():
+            self.values.get[Self.static_storage]()[][idx] = value
+        else:
+            self.values.get[Self.dynamic_storage]()[][idx] = value
+
+    @always_inline
+    fn get_storage_unsafe_pointer(self) -> UnsafePointer[UInt8]:
+        if self._use_sso():
+            return self.values.get[
+                Self.static_storage
+            ]()[].get_storage_unsafe_pointer()
+        else:
+            return self.values.get[Self.dynamic_storage]()[].data
