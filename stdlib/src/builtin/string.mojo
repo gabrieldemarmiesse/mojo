@@ -26,7 +26,7 @@ from utils._format import Formattable, Formatter, ToFormatter
 from .io import _snprintf
 
 # ===----------------------------------------------------------------------===#
-# Utilties
+# Utilities
 # ===----------------------------------------------------------------------===#
 
 
@@ -65,7 +65,7 @@ fn ord(s: String) -> Int:
     # 2: 110aaaaa 10bbbbbb                   -> 00000000 00000000 00000aaa aabbbbbb     a << 6  | b
     # 3: 1110aaaa 10bbbbbb 10cccccc          -> 00000000 00000000 aaaabbbb bbcccccc     a << 12 | b << 6  | c
     # 4: 11110aaa 10bbbbbb 10cccccc 10dddddd -> 00000000 000aaabb bbbbcccc ccdddddd     a << 18 | b << 12 | c << 6 | d
-    var p = s._as_ptr().bitcast[DType.uint8]()
+    var p = s.unsafe_ptr().bitcast[DType.uint8]()
     var b1 = p.load()
     if (b1 >> 7) == 0:  # This is 1 byte ASCII char
         debug_assert(len(s) == 1, "input string length must be 1")
@@ -107,10 +107,7 @@ fn chr(c: Int) -> String:
     # 4: 00000000 000aaabb bbbbcccc ccdddddd -> 11110aaa 10bbbbbb 10cccccc 10dddddd     a >> 18 | 0b11110000, b >> 12 | 0b10000000, c >> 6 | 0b10000000, d | 0b10000000
 
     if (c >> 7) == 0:  # This is 1 byte ASCII char
-        var p = DTypePointer[DType.int8].alloc(2)
-        p.store(c)
-        p.store(1, 0)
-        return String(p, 2)
+        return _chr_ascii(c)
 
     @always_inline
     fn _utf8_len(val: Int) -> Int:
@@ -133,6 +130,74 @@ fn chr(c: Int) -> String:
         p.store(i, ((c >> shift) & 0b00111111) | 0b10000000)
     p.store(num_bytes, 0)
     return String(p.bitcast[DType.int8](), num_bytes + 1)
+
+
+# ===----------------------------------------------------------------------===#
+# ascii
+# ===----------------------------------------------------------------------===#
+
+
+@always_inline("nodebug")
+fn _chr_ascii(c: Int8) -> String:
+    """Returns a string based on the given ASCII code point.
+
+    Args:
+        c: An integer that represents a code point.
+
+    Returns:
+        A string containing a single character based on the given code point.
+    """
+    var buffer = String._buffer_type()
+    buffer.append(c)
+    buffer.append(0)
+    return String(_buffer=buffer^)
+
+
+@always_inline("nodebug")
+fn _repr_ascii(c: Int8) -> String:
+    """Returns a printable representation of the given ASCII code point.
+
+    Args:
+        c: An integer that represents a code point.
+
+    Returns:
+        A string containing a representation of the given code point.
+    """
+    alias ord_tab = ord("\t")
+    alias ord_new_line = ord("\n")
+    alias ord_carriage_return = ord("\r")
+    alias ord_back_slash = ord("\\")
+
+    if c == ord_back_slash:
+        return r"\\"
+    elif isprintable(c):
+        return _chr_ascii(c)
+    elif c == ord_tab:
+        return r"\t"
+    elif c == ord_new_line:
+        return r"\n"
+    elif c == ord_carriage_return:
+        return r"\r"
+    else:
+        var uc = c.cast[DType.uint8]()
+        if uc < 16:
+            return hex(uc, r"\x0")
+        else:
+            return hex(uc, r"\x")
+
+
+# TODO: This is currently the same as repr, should change with unicode strings
+@always_inline("nodebug")
+fn ascii(value: String) -> String:
+    """Get the ASCII representation of the object.
+
+    Args:
+        value: The object to get the ASCII representation of.
+
+    Returns:
+        A string containing the ASCII representation of the object.
+    """
+    return value.__repr__()
 
 
 # ===----------------------------------------------------------------------===#
@@ -171,7 +236,7 @@ fn _atol(str_ref: StringRef, base: Int = 10) raises -> Int:
     var is_negative: Bool = False
     var start: Int = 0
     var str_len = len(str_ref)
-    var buff = str_ref._as_ptr()
+    var buff = str_ref.unsafe_ptr()
 
     for pos in range(start, str_len):
         if isspace(buff[pos]):
@@ -421,11 +486,31 @@ fn isspace(c: Int8) -> Bool:
 
 
 # ===----------------------------------------------------------------------===#
+# isprintable
+# ===----------------------------------------------------------------------===#
+
+
+fn isprintable(c: Int8) -> Bool:
+    """Determines whether the given character is a printable character.
+
+    Args:
+        c: The character to check.
+
+    Returns:
+        True if the character is a printable character, otherwise False.
+    """
+    alias ord_space = ord(" ")
+    alias ord_tilde = ord("~")
+    return ord_space <= int(c) <= ord_tilde
+
+
+# ===----------------------------------------------------------------------===#
 # String
 # ===----------------------------------------------------------------------===#
 struct String(
     Sized,
     Stringable,
+    Representable,
     IntableRaising,
     KeyElement,
     Boolable,
@@ -447,11 +532,23 @@ struct String(
         """Return a Mojo-compatible representation of the `String` instance.
 
         You don't need to call this method directly, use `repr(my_string)` instead.
+
+        Returns:
+            A new representation of the string.
         """
-        if "'" in self:
-            return '"' + self + "'"
+        alias ord_squote = ord("'")
+        var result = String()
+        var use_dquote = False
+
+        for idx in range(len(self._buffer) - 1):
+            var char = self._buffer[idx]
+            result += _repr_ascii(char)
+            use_dquote = use_dquote or (char == ord_squote)
+
+        if use_dquote:
+            return '"' + result + '"'
         else:
-            return "'" + self + "'"
+            return "'" + result + "'"
 
     # ===------------------------------------------------------------------===#
     # Initializers
@@ -511,7 +608,9 @@ struct String(
         var length = len(impl)
         var capacity = impl.capacity
         self._buffer = List[Int8](
-            impl.steal_data().bitcast[Int8](), size=length, capacity=capacity
+            unsafe_pointer=impl.steal_data().bitcast[Int8](),
+            size=length,
+            capacity=capacity,
         )
 
     @always_inline
@@ -547,7 +646,7 @@ struct String(
         var buffer = Self._buffer_type()
         buffer.resize(length + 1, 0)
         memcpy(
-            rebind[DTypePointer[DType.int8]](
+            rebind[DTypePointer[DType.uint8]](
                 buffer.get_storage_unsafe_pointer()
             ),
             str.data,
@@ -738,7 +837,7 @@ struct String(
         var buffer = Self._buffer_type()
         var adjusted_span_len = len(adjusted_span)
         buffer.resize(adjusted_span_len + 1, 0)
-        var ptr = self._as_ptr()
+        var ptr = self.unsafe_ptr()
         for i in range(adjusted_span_len):
             buffer[i] = ptr[adjusted_span[i]]
         buffer[adjusted_span_len] = 0
@@ -752,7 +851,7 @@ struct String(
             The string length.
         """
         # Avoid returning -1 if the buffer is not initialized
-        if not self._as_ptr():
+        if not self.unsafe_ptr():
             return 0
 
         # The negative 1 is to account for the terminator.
@@ -771,10 +870,10 @@ struct String(
         if len(self) != len(other):
             return False
 
-        if int(self._as_ptr()) == int(other._as_ptr()):
+        if int(self.unsafe_ptr()) == int(other.unsafe_ptr()):
             return True
 
-        return memcmp(self._as_ptr(), other._as_ptr(), len(self)) == 0
+        return memcmp(self.unsafe_ptr(), other.unsafe_ptr(), len(self)) == 0
 
     @always_inline
     fn __ne__(self, other: String) -> Bool:
@@ -787,6 +886,60 @@ struct String(
             True if the Strings are not equal and False otherwise.
         """
         return not (self == other)
+
+    @always_inline
+    fn __lt__(self, rhs: String) -> Bool:
+        """Compare this String to the RHS using LT comparison.
+
+        Args:
+            rhs: The other String to compare against.
+
+        Returns:
+            True if this String is strictly less than the RHS String and False otherwise.
+        """
+        var len1 = len(self)
+        var len2 = len(rhs)
+
+        if len1 < len2:
+            return memcmp(self.unsafe_ptr(), rhs.unsafe_ptr(), len1) <= 0
+        else:
+            return memcmp(self.unsafe_ptr(), rhs.unsafe_ptr(), len2) < 0
+
+    @always_inline
+    fn __le__(self, rhs: String) -> Bool:
+        """Compare this String to the RHS using LE comparison.
+
+        Args:
+            rhs: The other String to compare against.
+
+        Returns:
+            True if this String is less than or equal to the RHS String and False otherwise.
+        """
+        return not (rhs < self)
+
+    @always_inline
+    fn __gt__(self, rhs: String) -> Bool:
+        """Compare this String to the RHS using GT comparison.
+
+        Args:
+            rhs: The other String to compare against.
+
+        Returns:
+            True if this String is strictly greater than the RHS String and False otherwise.
+        """
+        return rhs < self
+
+    @always_inline
+    fn __ge__(self, rhs: String) -> Bool:
+        """Compare this String to the RHS using GE comparison.
+
+        Args:
+            rhs: The other String to compare against.
+
+        Returns:
+            True if this String is greater than or equal to the RHS String and False otherwise.
+        """
+        return not (self < rhs)
 
     @always_inline
     fn __add__(self, other: String) -> String:
@@ -809,12 +962,12 @@ struct String(
         buffer.resize(total_len + 1, 0)
         memcpy(
             DTypePointer(buffer.get_storage_unsafe_pointer()),
-            self._as_ptr(),
+            self.unsafe_ptr(),
             self_len,
         )
         memcpy(
             DTypePointer(buffer.get_storage_unsafe_pointer() + self_len),
-            other._as_ptr(),
+            other.unsafe_ptr(),
             other_len + 1,  # Also copy the terminator
         )
         return Self(_buffer=buffer^)
@@ -849,8 +1002,8 @@ struct String(
         self._buffer.resize(total_len + 1, 0)
         # Copy the data alongside the terminator.
         memcpy(
-            self._as_uint8_ptr() + self_len,
-            other._as_uint8_ptr(),
+            self.unsafe_uint8_ptr() + self_len,
+            other.unsafe_uint8_ptr(),
             other_len + 1,
         )
 
@@ -912,7 +1065,7 @@ struct String(
 
             # FIXME:
             #   String.__iadd__ currently only accepts a String, meaning this
-            #   RHS will allocate unneccessarily.
+            #   RHS will allocate unnecessarily.
             ptr[] += strref
 
         return Formatter(
@@ -936,9 +1089,9 @@ struct String(
         """
         if len(elems) == 0:
             return ""
-        var curr = String(elems[0])
+        var curr = str(elems[0])
         for i in range(1, len(elems)):
-            curr += self + String(elems[i])
+            curr += self + str(elems[i])
         return curr
 
     fn join[*Types: Stringable](self, *elems: *Types) -> String:
@@ -975,7 +1128,7 @@ struct String(
         strings.  Using this requires the use of the _strref_keepalive() method
         to keep the underlying string alive long enough.
         """
-        return StringRef {data: self._as_ptr(), length: len(self)}
+        return StringRef {data: self.unsafe_uint8_ptr(), length: len(self)}
 
     fn _strref_keepalive(self):
         """
@@ -986,10 +1139,10 @@ struct String(
         pass
 
     # TODO: Remove this method when #2317 is done
-    fn _as_ptr(self) -> DTypePointer[DType.int8]:
+    fn unsafe_ptr(self) -> DTypePointer[DType.int8]:
         """Retrieves a pointer to the underlying memory.
 
-        Note that you should use `_as_uint8_ptr()` if you need to access the
+        Note that you should use `unsafe_uint8_ptr()` if you need to access the
         pointer as we are now storing the bytes as UInt8.
 
         See https://github.com/modularml/mojo/issues/2317 for more information.
@@ -1001,7 +1154,7 @@ struct String(
             self._buffer.get_storage_unsafe_pointer()
         )
 
-    fn _as_uint8_ptr(self) -> DTypePointer[DType.uint8]:
+    fn unsafe_uint8_ptr(self) -> DTypePointer[DType.uint8]:
         """Retrieves a pointer to the underlying memory.
 
         Returns:
@@ -1145,7 +1298,7 @@ struct String(
           new: The substring to replace with.
 
         Returns:
-          The string where all occurences of `old` are replaced with `new`.
+          The string where all occurrences of `old` are replaced with `new`.
         """
         if not old:
             return self._interleave(new)
@@ -1154,9 +1307,9 @@ struct String(
         if occurrences == -1:
             return self
 
-        var self_start = self._as_ptr()
-        var self_ptr = self._as_ptr()
-        var new_ptr = new._as_ptr()
+        var self_start = self.unsafe_ptr()
+        var self_ptr = self.unsafe_ptr()
+        var new_ptr = new.unsafe_ptr()
 
         var self_len = len(self)
         var old_len = len(old)
@@ -1246,8 +1399,8 @@ struct String(
 
     fn _interleave(self, val: String) -> String:
         var res = List[Int8]()
-        var val_ptr = val._as_ptr()
-        var self_ptr = self._as_ptr()
+        var val_ptr = val.unsafe_ptr()
+        var self_ptr = self.unsafe_ptr()
         res.reserve(len(val) * len(self) + 1)
         for i in range(len(self)):
             for j in range(len(val)):
@@ -1261,7 +1414,7 @@ struct String(
         converted to lowercase.
 
         Returns:
-            A new string where cased letters have been convered to lowercase.
+            A new string where cased letters have been converted to lowercase.
         """
 
         # TODO(#26444):
@@ -1286,7 +1439,7 @@ struct String(
     fn _toggle_ascii_case[check_case: fn (Int8) -> Bool](self) -> String:
         var copy: String = self
 
-        var char_ptr = copy._as_ptr()
+        var char_ptr = copy.unsafe_ptr()
 
         for i in range(len(self)):
             var char: Int8 = char_ptr[i]
@@ -1393,7 +1546,7 @@ struct String(
             n : The number of times to concatenate the string.
 
         Returns:
-            The string concantenated `n` times.
+            The string concatenated `n` times.
         """
         if n <= 0:
             return ""
@@ -1407,7 +1560,7 @@ struct String(
                     buf.get_storage_unsafe_pointer()
                 )
                 + len_self * i,
-                self._as_ptr(),
+                self.unsafe_ptr(),
                 len_self,
             )
         return String(_buffer=buf^)
@@ -1539,6 +1692,22 @@ fn _calc_initial_buffer_size[type: DType](n0: Scalar[type]) -> Int:
     return 128 + 1  # Add 1 for the terminator
 
 
+fn _calc_format_buffer_size[type: DType]() -> Int:
+    """
+    Returns a buffer size in bytes that is large enough to store a formatted
+    number of the specified type.
+    """
+
+    # TODO:
+    #   Use a smaller size based on the `dtype`, e.g. we don't need as much
+    #   space to store a formatted int8 as a float64.
+    @parameter
+    if type.is_integral():
+        return 64 + 1
+    else:
+        return 128 + 1  # Add 1 for the terminator
+
+
 @value
 struct _InlineBytesList[capacity: Int](Sized, CollectionElement):
     """This type is similar to `InlineArray` but it has a `List` behavior and interface with a maximum size.
@@ -1623,7 +1792,9 @@ struct _BytesListWithSmallSizeOptimization[inline_size: Int = 24](
         size: Int,
         capacity: Int,
     ):
-        self.values = List[Int8](unsafe_pointer, size=size, capacity=capacity)
+        self.values = List[Int8](
+            unsafe_pointer=unsafe_pointer, size=size, capacity=capacity
+        )
 
     @always_inline
     fn _use_sso(self) -> Bool:
@@ -1631,21 +1802,19 @@ struct _BytesListWithSmallSizeOptimization[inline_size: Int = 24](
 
     fn capacity(self) -> Int:
         if self._use_sso():
-            return self.values.get[Self.dynamic_storage]()[].capacity
+            return self.values[Self.dynamic_storage].capacity
         return Self.inline_size
 
     fn __len__(self) -> Int:
         if self._use_sso():
-            return len(self.values.get[Self.static_storage]()[])
-        return len(self.values.get[Self.dynamic_storage]()[])
+            return len(self.values[Self.static_storage])
+        return len(self.values[Self.dynamic_storage])
 
     fn _switch_to_dynamic_storage(inout self, target_capacity: Int):
         var new_storage = Self.dynamic_storage(capacity=target_capacity)
         memcpy(
             new_storage.data,
-            self.values.get[
-                Self.static_storage
-            ]()[].get_storage_unsafe_pointer(),
+            self.values[Self.static_storage].get_storage_unsafe_pointer(),
             len(self),
         )
         new_storage.size = len(self)
@@ -1654,51 +1823,49 @@ struct _BytesListWithSmallSizeOptimization[inline_size: Int = 24](
     fn append(inout self, value: Int8):
         if self._use_sso():
             if len(self) < Self.inline_size:
-                self.values.get[Self.static_storage]()[].append(value)
+                self.values[Self.static_storage].append(value)
                 return
             else:
                 self._switch_to_dynamic_storage(target_capacity=len(self) + 1)
 
-        self.values.get[Self.dynamic_storage]()[].append(value)
+        self.values[Self.dynamic_storage].append(value)
 
     @always_inline
     fn __getitem__(self, idx: Int) -> Int8:
         if self._use_sso():
-            return self.values.get[Self.static_storage]()[][idx]
+            return self.values[Self.static_storage][idx]
         else:
-            return self.values.get[Self.dynamic_storage]()[][idx]
+            return self.values[Self.dynamic_storage][idx]
 
     @always_inline
     fn __setitem__(inout self, idx: Int, value: Int8):
         if self._use_sso():
-            self.values.get[Self.static_storage]()[][idx] = value
+            self.values[Self.static_storage][idx] = value
         else:
-            self.values.get[Self.dynamic_storage]()[][idx] = value
+            self.values[Self.dynamic_storage][idx] = value
 
     @always_inline
     fn get_storage_unsafe_pointer(self) -> UnsafePointer[Int8]:
         if self._use_sso():
-            return self.values.get[
-                Self.static_storage
-            ]()[].get_storage_unsafe_pointer()
+            return self.values[Self.static_storage].get_storage_unsafe_pointer()
         else:
-            return self.values.get[Self.dynamic_storage]()[].data
+            return self.values[Self.dynamic_storage].data
 
     @always_inline
     fn resize(inout self, new_size: Int, value: Int8):
         if self._use_sso():
             if new_size <= Self.inline_size:
-                self.values.get[Self.static_storage]()[].resize(new_size, value)
+                self.values[Self.static_storage].resize(new_size, value)
                 return
             else:
                 self._switch_to_dynamic_storage(target_capacity=new_size)
-        self.values.get[Self.dynamic_storage]()[].resize(new_size, value)
+        self.values[Self.dynamic_storage].resize(new_size, value)
 
     @always_inline
     fn pop(inout self) -> Int8:
         if self._use_sso():
-            return self.values.get[Self.static_storage]()[].pop()
-        return self.values.get[Self.dynamic_storage]()[].pop()
+            return self.values[Self.static_storage].pop()
+        return self.values[Self.dynamic_storage].pop()
 
     @always_inline
     fn reserve(inout self, new_capacity: Int):
@@ -1706,4 +1873,4 @@ struct _BytesListWithSmallSizeOptimization[inline_size: Int = 24](
             if new_capacity <= Self.inline_size:
                 return
             self._switch_to_dynamic_storage(target_capacity=new_capacity)
-        self.values.get[Self.dynamic_storage]()[].reserve(new_capacity)
+        self.values[Self.dynamic_storage].reserve(new_capacity)
