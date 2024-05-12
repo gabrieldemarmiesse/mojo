@@ -186,7 +186,16 @@ struct _DirHandle:
 # ===----------------------------------------------------------------------=== #
 # listdir
 # ===----------------------------------------------------------------------=== #
-fn listdir(path: String = "") raises -> List[String]:
+fn listdir() raises -> List[String]:
+    """Gets the list of entries contained in the empty path.
+
+    Returns:
+      Returns the list of entries in the path provided.
+    """
+    return listdir("")
+
+
+fn listdir(path: String) raises -> List[String]:
     """Gets the list of entries contained in the path provided.
 
     Args:
