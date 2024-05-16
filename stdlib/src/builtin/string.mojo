@@ -569,6 +569,8 @@ struct String(
         Args:
             impl: The buffer.
         """
+        if len(impl) == 0:
+            impl.append(0)
         debug_assert(
             impl[-1] == 0,
             "expected last element of String buffer to be null terminator",
@@ -592,6 +594,8 @@ struct String(
         Args:
             impl: The buffer.
         """
+        if len(impl) == 0:
+            impl.append(0)
         debug_assert(
             impl[-1] == 0,
             "expected last element of String buffer to be null terminator",
@@ -609,6 +613,7 @@ struct String(
     fn __init__(inout self):
         """Construct an uninitialized string."""
         self._buffer = Self._buffer_type()
+        self._buffer.append(0)
 
     @always_inline
     fn __init__(inout self, str: StringRef):
@@ -620,14 +625,7 @@ struct String(
         var length = len(str)
         var buffer = Self._buffer_type()
         buffer.resize(length + 1, 0)
-        memcpy(
-            # TODO(modularml/mojo#2317):
-            #   Remove this bitcast after transition to UInt8 for string data
-            #   is complete.
-            dest=buffer.data.bitcast[UInt8](),
-            src=str.data,
-            count=length,
-        )
+        memcpy(rebind[DTypePointer[DType.uint8]](buffer.data), str.data, length)
         buffer[length] = 0
         self._buffer = buffer^
 
@@ -647,9 +645,9 @@ struct String(
         var buffer = Self._buffer_type()
         buffer.resize(length + 1, 0)
         memcpy(
-            dest=buffer.data,
-            src=str_slice.as_bytes_slice().unsafe_ptr(),
-            count=length,
+            DTypePointer(buffer.data),
+            DTypePointer(str_slice.as_bytes_slice().unsafe_ptr()),
+            length,
         )
         buffer[length] = 0
         self._buffer = buffer^
@@ -694,8 +692,8 @@ struct String(
         """
         # we don't know the capacity of ptr, but we'll assume it's the same or
         # larger than len
-        self._buffer = Self._buffer_type(
-            unsafe_pointer=ptr, size=len, capacity=len
+        self = Self(
+            Self._buffer_type(unsafe_pointer=ptr, size=len, capacity=len)
         )
 
     @always_inline
@@ -711,8 +709,10 @@ struct String(
         """
         # we don't know the capacity of ptr, but we'll assume it's the same or
         # larger than len
-        self._buffer = Self._buffer_type(
-            unsafe_pointer=ptr.bitcast[Int8](), size=len, capacity=len
+        self = Self(
+            Self._buffer_type(
+                unsafe_pointer=ptr.bitcast[Int8](), size=len, capacity=len
+            )
         )
 
     @always_inline
@@ -726,9 +726,13 @@ struct String(
             ptr: The pointer to the buffer.
             len: The length of the buffer, including the null terminator.
         """
-        self._buffer = Self._buffer_type()
-        self._buffer.data = rebind[UnsafePointer[Int8]](ptr)
-        self._buffer.size = len
+        self = Self(
+            Self._buffer_type(
+                unsafe_pointer=rebind[UnsafePointer[Int8]](ptr),
+                size=len,
+                capacity=len,
+            )
+        )
 
     @always_inline
     fn __init__(inout self, ptr: DTypePointer[DType.int8], len: Int):
@@ -741,7 +745,7 @@ struct String(
             ptr: The pointer to the buffer.
             len: The length of the buffer, including the null terminator.
         """
-        self = String(ptr.address, len)
+        self = Self(ptr.address, len)
 
     @always_inline
     fn __copyinit__(inout self, existing: Self):
@@ -988,14 +992,14 @@ struct String(
         var buffer = Self._buffer_type()
         buffer.resize(total_len + 1, 0)
         memcpy(
-            dest=buffer.data,
-            src=self.unsafe_ptr(),
-            count=self_len,
+            DTypePointer(buffer.data),
+            self.unsafe_ptr(),
+            self_len,
         )
         memcpy(
-            dest=buffer.data + self_len,
-            src=other.unsafe_ptr(),
-            count=other_len + 1,  # Also copy the terminator
+            DTypePointer(buffer.data + self_len),
+            other.unsafe_ptr(),
+            other_len + 1,  # Also copy the terminator
         )
         return Self(buffer^)
 
@@ -1648,9 +1652,9 @@ struct String(
         buf.resize(count, 0)
         for i in range(n):
             memcpy(
-                dest=buf.data + len_self * i,
-                src=self.unsafe_ptr(),
-                count=len_self,
+                rebind[DTypePointer[DType.int8]](buf.data) + len_self * i,
+                self.unsafe_ptr(),
+                len_self,
             )
         return String(buf^)
 
