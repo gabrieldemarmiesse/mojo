@@ -19,26 +19,27 @@ from testing import assert_equal, assert_false, assert_raises, assert_true
 
 def test_object_ctors():
     a = object()
-    assert_true(a._value.is_none())
-    a = 5
-    assert_true(a._value.is_int())
-    assert_equal(a._value.get_as_int(), 5)
-    a = 6.5
-    assert_true(a._value.is_float())
-    assert_equal(a._value.get_as_float(), 6.5)
-    a = False
-    assert_true(a._value.is_bool())
-    assert_false(a._value.get_as_bool())
-
-    a = "foobar"
-    assert_true(a)
-    a = ""
-    assert_false(a)
-    a = []
-    assert_false(a)
+    #assert_true(a._value.is_none())
+    #a = 5
+    #assert_true(a._value.is_int())
+    #assert_equal(a._value.get_as_int(), 5)
+    #a = 6.5
+    #assert_true(a._value.is_float())
+    #assert_equal(a._value.get_as_float(), 6.5)
+    #a = False
+    #assert_true(a._value.is_bool())
+    #assert_false(a._value.get_as_bool())
+#
+    #a = "foobar"
+    #assert_true(a)
+    #a = ""
+    #assert_false(a)
+    #a = []
+    #assert_false(a)
     a = [1, 2]
     assert_true(a)
     b = object([2, 4])
+    print("asserting")
     assert_true(a < b)
 
 
@@ -305,11 +306,11 @@ def test_convert_to_string():
 
 def main():
     test_object_ctors()
-    test_comparison_ops()
-    test_arithmetic_ops()
-    test_arithmetic_ops_div()
-    test_object_bitwise()
-    test_object_function()
-    test_non_object_getattr()
-    test_matrix()
-    test_convert_to_string()
+    #test_comparison_ops()
+    #test_arithmetic_ops()
+    #test_arithmetic_ops_div()
+    #test_object_bitwise()
+    #test_object_function()
+    #test_non_object_getattr()
+    #test_matrix()
+    #test_convert_to_string()

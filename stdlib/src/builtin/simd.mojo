@@ -219,13 +219,13 @@ struct SIMD[type: DType, size: Int = simdwidthof[type]()](
         self.value = vec
 
     @always_inline("nodebug")
-    fn __init__(inout self, *, other: SIMD[type, size]):
+    fn copy(self) -> Self:
         """Explicitly copy the provided value.
 
-        Args:
-            other: The value to copy.
+        Returns:
+            A new instance of the SIMD vector.
         """
-        self.__copyinit__(other)
+        return Self(self.value)
 
     @always_inline("nodebug")
     fn __init__(inout self, value: UInt):

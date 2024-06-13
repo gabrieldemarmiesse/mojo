@@ -814,13 +814,13 @@ struct String(
         """Construct an uninitialized string."""
         self._buffer = Self._buffer_type()
 
-    fn __init__(inout self, *, other: Self):
-        """Explicitly copy the provided value.
+    fn copy(self) -> Self:
+        """Explicitly copy the instance.
 
-        Args:
-            other: The value to copy.
+        Returns:
+            A copy of the instance.
         """
-        self.__copyinit__(other)
+        return String(self._buffer.copy())
 
     @always_inline
     fn __init__(inout self, str: StringRef):

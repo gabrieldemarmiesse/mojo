@@ -955,6 +955,7 @@ struct object(IntableRaising, Boolable, Stringable):
         if lhsValue.is_float():
             return fp_func(lhsValue.get_as_float(), rhsValue.get_as_float())
         if lhsValue.is_int():
+            print("we are int", lhs, rhs)
             return int_func(lhsValue.get_as_int(), rhsValue.get_as_int())
         debug_assert(lhsValue.is_bool(), "expected both values to be bool")
         return bool_func(lhsValue.get_as_bool(), rhsValue.get_as_bool())
@@ -993,15 +994,19 @@ struct object(IntableRaising, Boolable, Stringable):
         Returns:
             True if the object is less than the right hard argument.
         """
+        print("in __lt__")
         if self._value.is_str() and rhs._value.is_str():
+            print("i'm a str")
             return self._string_compare(rhs) < 0
         if self._value.is_list() and rhs._value.is_list():
+            print("i'm a list")
+            print("comparing", self, rhs)
             return self._list_compare(rhs) < 0
 
         @always_inline
         fn bool_fn(lhs: Bool, rhs: Bool) -> Bool:
             return not lhs and rhs
-
+        print("comparing", self, rhs)
         return Self._comparison_op[Float64.__lt__, Int64.__lt__, bool_fn](
             self, rhs
         )

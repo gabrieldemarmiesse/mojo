@@ -371,7 +371,7 @@ struct UnsafePointer[
 
         var ptr = self.bitcast[T2, address_space = AddressSpace.GENERIC]()
 
-        __get_address_as_uninit_lvalue(ptr.address) = T2(other=value)
+        __get_address_as_uninit_lvalue(ptr.address) = value.copy()
 
     @always_inline
     fn free(self):

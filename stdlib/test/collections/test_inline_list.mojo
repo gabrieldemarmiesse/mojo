@@ -63,14 +63,13 @@ struct ValueToCountDestructor(CollectionElementNew):
     var value: Int
     var destructor_counter: UnsafePointer[List[Int]]
 
-    fn __init__(inout self, *, other: Self):
+    fn copy(self) -> Self:
         """Explicitly copy the provided value.
 
-        Args:
-            other: The value to copy.
+        Returns:
+            The copied value.
         """
-        self.value = other.value
-        self.destructor_counter = other.destructor_counter
+        return Self(self.value, self.destructor_counter)
 
     fn __del__(owned self):
         self.destructor_counter[].append(self.value)

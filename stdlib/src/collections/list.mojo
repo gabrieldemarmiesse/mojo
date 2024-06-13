@@ -73,7 +73,7 @@ struct _ListIter[
             return self.index
 
 
-struct List[T: CollectionElement](CollectionElement, Sized, Boolable):
+struct List[T: CollectionElement](CollectionElement, Sized, Boolable, CollectionElementNew):
     """The `List` type is a dynamically-allocated list.
 
     It supports pushing and popping from the back resizing the underlying
@@ -389,6 +389,15 @@ struct List[T: CollectionElement](CollectionElement, Sized, Boolable):
             A string representation of the list.
         """
         return self.__str__()
+
+    fn copy(self) -> Self:
+        """Creates a copy of the list.
+
+        Returns:
+            A new instance of the list.
+        """
+        # TODO: use .copy() when T is ExplicitlyCopyable
+        return Self(self)
 
     # ===-------------------------------------------------------------------===#
     # Methods

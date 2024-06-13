@@ -242,6 +242,7 @@ fn int(value: String, base: Int = 10) raises -> Int:
 @value
 @register_passable("trivial")
 struct Int(
+    ExplicitlyCopyable,
     Absable,
     Boolable,
     Ceilable,
@@ -278,13 +279,14 @@ struct Int(
         """Default constructor that produces zero."""
         self.value = __mlir_op.`index.constant`[value = __mlir_attr.`0:index`]()
 
-    fn __init__(inout self, *, other: Self):
+    @always_inline
+    fn copy(self) -> Self:
         """Explicitly copy the provided value.
 
-        Args:
-            other: The value to copy.
+        Returns:
+            The copied integer.
         """
-        self = other
+        return Self(self.value)
 
     @always_inline("nodebug")
     fn __init__(inout self, value: __mlir_type.index):

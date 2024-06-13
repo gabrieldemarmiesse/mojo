@@ -103,14 +103,13 @@ struct Span[
         self._len = len
 
     @always_inline
-    fn __init__(inout self, *, other: Self):
-        """Explicitly construct a deep copy of the provided Span.
+    fn copy(self) -> Self:
+        """Explicitly construct a copy of the provided Span.
 
-        Args:
-            other: The Span to copy.
+        Returns:
+            A copy of the provided Span, it points to the same data.
         """
-        self._data = other._data
-        self._len = other._len
+        return Self(unsafe_ptr=self._data, len=self._len)
 
     @always_inline
     fn __init__(inout self, ref [lifetime]list: List[T]):

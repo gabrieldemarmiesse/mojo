@@ -73,16 +73,13 @@ struct Bool(
     """The underlying storage of the boolean value."""
 
     @always_inline("nodebug")
-    fn __init__(*, other: Self) -> Bool:
+    fn copy(self) -> Bool:
         """Explicitly construct a deep copy of the provided value.
-
-        Args:
-            other: The value to copy.
 
         Returns:
             The constructed Bool value.
         """
-        return Self {value: other.value}
+        return Self {value: self.value}
 
     @always_inline("nodebug")
     fn __init__(value: __mlir_type.i1) -> Bool:

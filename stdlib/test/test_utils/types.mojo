@@ -47,9 +47,16 @@ struct ExplicitCopyOnly(ExplicitlyCopyable):
         self.value = value
         self.copy_count = 0
 
-    fn __init__(inout self, *, other: Self):
-        self.value = other.value
-        self.copy_count = other.copy_count + 1
+    # TODO: remove this __moveinit__ once we have garanteed return
+    # value optimization.
+    fn __moveinit__(inout self, owned existing: Self):
+        self.value = existing.value
+        self.copy_count = existing.copy_count
+
+    fn copy(self) -> Self:
+        var new_instance = Self(value=self.value)
+        new_instance.copy_count = self.copy_count + 1
+        return new_instance^
 
 
 struct CopyCounter(CollectionElement):
@@ -84,14 +91,15 @@ struct MoveCounter[T: CollectionElementNew](
 
     # TODO: This type should not be ExplicitlyCopyable, but has to be to satisfy
     #       CollectionElementNew at the moment.
-    fn __init__(inout self, *, other: Self):
+    fn copy(self) -> Self:
         """Explicitly copy the provided value.
 
-        Args:
-            other: The value to copy.
+        Returns:
+            The copied value.
         """
-        self.value = T(other=other.value)
-        self.move_count = other.move_count
+        var new_instance = Self(value=self.value.copy())
+        new_instance.move_count = self.move_count
+        return new_instance
 
     fn __moveinit__(inout self, owned existing: Self):
         self.value = existing.value^
@@ -100,6 +108,5 @@ struct MoveCounter[T: CollectionElementNew](
     # TODO: This type should not be Copyable, but has to be to satisfy
     #       CollectionElement at the moment.
     fn __copyinit__(inout self, existing: Self):
-        # print("ERROR: _MoveCounter copy constructor called unexpectedly!")
-        self.value = T(other=existing.value)
+        self.value = existing.value.copy()
         self.move_count = existing.move_count

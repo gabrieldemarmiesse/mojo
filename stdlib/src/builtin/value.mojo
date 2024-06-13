@@ -107,11 +107,11 @@ trait ExplicitlyCopyable:
     explicitly copyable type can only be copied when the explicit copy
     initializer is called intentionally by the programmer.
 
-    An explicit copy initializer is just a normal `__init__` method that takes
-    a `borrowed` argument of `Self`.
+    An explicit copy initializer is just a normal `.copy()` method that takes
+    a `borrowed` argument of `Self` and returns a new instance of `Self`.
 
     Example implementing the `ExplicitlyCopyable` trait on `Foo` which requires
-    the `__init__(.., Self)` method:
+    the `.copy()` method:
 
     ```mojo
     struct Foo(ExplicitlyCopyable):
@@ -120,17 +120,16 @@ trait ExplicitlyCopyable:
         fn __init__(inout self, s: String):
             self.s = s
 
-        fn __init__(inout self, copy: Self):
+        fn copy(self) -> Self:
             print("explicitly copying value")
-            self.s = copy.s
+            return Self(self.s.copy())
     ```
 
     You can now copy objects inside a generic function:
 
     ```mojo
     fn copy_return[T: ExplicitlyCopyable](foo: T) -> T:
-        var copy = T(foo)
-        return copy
+        return foo.copy()
 
     var foo = Foo("test")
     var res = copy_return(foo)
@@ -141,15 +140,11 @@ trait ExplicitlyCopyable:
     ```
     """
 
-    # Note:
-    #   `other` is a required named argument for the time being to minimize
-    #   implicit conversion overload ambiguity errors, particularly
-    #   with SIMD and Int.
-    fn __init__(inout self, *, other: Self):
+    fn copy(self) -> Self:
         """Explicitly construct a deep copy of the provided value.
 
-        Args:
-            other: The value to copy.
+        Returns:
+            A new instance of the value.
         """
         ...
 

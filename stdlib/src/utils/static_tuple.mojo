@@ -355,19 +355,20 @@ struct InlineArray[
         # Mark the elements as already destroyed.
         storage._is_owned = False
 
-    fn __init__(inout self, *, other: Self):
-        """Explicitly copy the provided value.
+    fn copy(self) -> Self:
+        """Explicitly copy this instance.
 
-        Args:
-            other: The value to copy.
+        Returns:
+            A new instance of Self.
         """
 
-        self = Self(unsafe_uninitialized=True)
+        var copy_of_self = Self(unsafe_uninitialized=True)
 
         for idx in range(size):
-            var ptr = self.unsafe_ptr() + idx
+            var ptr = copy_of_self.unsafe_ptr() + idx
 
-            ptr.initialize_pointee_explicit_copy(other[idx])
+            ptr.initialize_pointee_explicit_copy(self[idx])
+        return copy_of_self
 
     # ===------------------------------------------------------------------===#
     # Operator dunders

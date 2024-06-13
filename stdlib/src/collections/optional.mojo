@@ -36,8 +36,9 @@ from utils import Variant
 
 # TODO(27780): NoneType can't currently conform to traits
 @value
-struct _NoneType(CollectionElement):
-    pass
+struct _NoneType(CollectionElement, CollectionElementNew):
+    fn copy(self) -> Self:
+        return Self()
 
 
 # ===----------------------------------------------------------------------===#
@@ -46,7 +47,7 @@ struct _NoneType(CollectionElement):
 
 
 @value
-struct Optional[T: CollectionElement](CollectionElement, Boolable):
+struct Optional[T: CollectionElementNew](CollectionElementNew, Boolable):
     """A type modeling a value which may or may not be present.
 
     Optional values can be thought of as a type-safe nullable pattern.
@@ -154,6 +155,16 @@ struct Optional[T: CollectionElement](CollectionElement, Boolable):
         """
         return not self
 
+    fn copy(self) -> Self:
+        """Copy the Optional.
+
+        Returns:
+            A copy of the Optional.
+        """
+        if self.__bool__():
+            return Self(self.value().copy())
+        return Self()
+
     # ===-------------------------------------------------------------------===#
     # Methods
     # ===-------------------------------------------------------------------===#
@@ -200,7 +211,7 @@ struct Optional[T: CollectionElement](CollectionElement, Boolable):
         """
 
         debug_assert(self.__bool__(), ".value() on empty Optional")
-        return self._value[T]
+        return self._value[T].copy()
 
     fn take(inout self) -> T:
         """Move the value out of the Optional.
@@ -247,8 +258,8 @@ struct Optional[T: CollectionElement](CollectionElement, Boolable):
             The underlying value contained in the Optional or a default value.
         """
         if self.__bool__():
-            return self._value[T]
-        return default
+            return self._value[T].copy()
+        return default.copy()
 
 
 # ===----------------------------------------------------------------------===#
