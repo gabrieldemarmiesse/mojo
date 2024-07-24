@@ -1429,7 +1429,7 @@ struct String(
         Notes:
             This does not include the trailing null terminator in the count.
         """
-        return max(len(self._buffer) - 1, 0)
+        return len(self._buffer) - 1
 
     @always_inline
     @deprecated("use byte_length() instead")
@@ -1442,7 +1442,7 @@ struct String(
         Notes:
             This does not include the trailing null terminator in the count.
         """
-        return max(len(self._buffer) - 1, 0)
+        return len(self._buffer) - 1
 
     fn _steal_ptr(inout self) -> UnsafePointer[UInt8]:
         """Transfer ownership of pointer to the underlying memory.
