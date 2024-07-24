@@ -103,13 +103,13 @@ struct List[T: CollectionElement, small_buffer_size: Int = 0](
     # of size null if small buffer optimization is not used, but it triggers
     # another compiler bug so we use a plain Bool instead.
     # This flag won't be here forever.
-    var _sbo_in_use_flag: Bool
-    var _small_buffer: Self._small_buffer_type
     var data: UnsafePointer[T]
+    var _small_buffer: Self._small_buffer_type
     """The underlying storage for the list."""
     var size: Int
     """The number of elements in the list."""
     var capacity: Int
+    var _sbo_in_use_flag: Bool
     """The amount of elements that can fit in the list without resizing it."""
 
     # ===-------------------------------------------------------------------===#
