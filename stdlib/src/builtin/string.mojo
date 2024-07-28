@@ -689,7 +689,7 @@ struct String(
     """Represents a mutable string."""
 
     # Fields
-    alias _buffer_type = List[UInt8]
+    alias _buffer_type = List[UInt8, 15]
     var _buffer: Self._buffer_type
     """The underlying storage for the string."""
 
@@ -771,7 +771,7 @@ struct String(
         """Construct an uninitialized string."""
         self._buffer = Self._buffer_type()
         # The Null terminator is cheap because it is on the stack
-        self._buffer.append(0)
+        # self._buffer.append(0)
 
     fn __init__(inout self, *, other: Self):
         """Explicitly copy the provided value.
