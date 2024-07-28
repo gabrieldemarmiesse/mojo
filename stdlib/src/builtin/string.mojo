@@ -692,7 +692,7 @@ struct String(
     # It's of size 15 because one byte is taken in the List with small
     # buffer optimization. We can put back 16 when
     # the flag has been removed from List.
-    alias _small_buffer_size = 15
+    alias _small_buffer_size = 0
     alias _buffer_type = List[UInt8, Self._small_buffer_size]
     var _buffer: Self._buffer_type
     """The underlying storage for the string."""
