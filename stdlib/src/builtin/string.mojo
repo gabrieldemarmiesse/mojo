@@ -713,7 +713,7 @@ struct String(
     # ===------------------------------------------------------------------=== #
 
     @always_inline
-    fn __init__(inout self, owned impl: Self._buffer_type):
+    fn __init__(inout self, owned impl: List[UInt8]):
         """Construct a string from a buffer of bytes.
 
         The buffer must have a small buffer optimization size of 15 bytes exactly
@@ -721,7 +721,7 @@ struct String(
         The buffer must be terminated with a null byte:
 
         ```mojo
-        var buf = List[UInt8, 15]()
+        var buf = List[UInt8]()
         buf.append(ord('H'))
         buf.append(ord('i'))
         buf.append(0)
