@@ -690,7 +690,13 @@ struct String(
     """Represents a mutable string."""
 
     # Fields
-    alias _buffer_type = List[UInt8, hint_trivial_type=True]
+    # It's of size 15 because one byte is taken in the List with small
+    # buffer optimization. We can put back 16 when
+    # the flag has been removed from List.
+    alias _small_buffer_size = 15
+    alias _buffer_type = List[
+        UInt8, Self._small_buffer_size, hint_trivial_type=True
+    ]
     var _buffer: Self._buffer_type
     """The underlying storage for the string."""
 
@@ -745,6 +751,8 @@ struct String(
     fn __init__(inout self):
         """Construct an uninitialized string."""
         self._buffer = Self._buffer_type()
+        # The Null terminator is cheap because it is on the stack
+        self._buffer.append(0)
 
     fn __init__(inout self, *, other: Self):
         """Explicitly copy the provided value.
