@@ -50,6 +50,14 @@ fn simd_table_lookup[
             SIMD[DType.uint8, input_vector_size],
             has_side_effect=False,
         ](lookup_table, indices)
+    # elif sys.has_avx2() and input_vector_size == 32:
+    #    var lookup_table_for_vpshufb = lookup_table.join(lookup_table)
+    #    return sys.llvm_intrinsic[
+    #        "llvm.x86.avx2.vpshufb",
+    #        SIMD[DType.uint8, input_vector_size],
+    #        has_side_effect=False,
+    #    ](lookup_table_for_vpshufb, indices)
+
     else:
         # Slow path, ~3x slower than pshuf for size 16
         var result = SIMD[DType.uint8, input_vector_size]()
@@ -125,7 +133,7 @@ fn continuation_lengths(high_nibbles: BytesVector) -> BytesVector:
     # Input:  0xxxxxxx, 110xxxxx, 10xxxxxx, 1110xxxx, 10xxxxxx, 10xxxxxx, 10xxxxxx, 1111xxxx,
     # Output: 1       , 2,      , 0       , 3,      , 0       , 0       , 0       , 4
 
-    alias table_of_continuations = BytesVector(
+    alias table_of_continuations = SIMD[DType.uint8, 16](
         1,
         1,
         1,
@@ -152,13 +160,21 @@ fn carry_continuations(
     initial_lengths: BytesVector, previous_carries: BytesVector
 ) -> BytesVector:
     var right1 = subtract_with_saturation[1](
-        _mm_alignr_epi8[16 - 1](initial_lengths, previous_carries)
+        _mm_alignr_epi8[VECTOR_SIZE - 1](initial_lengths, previous_carries)
     )
+    # Input:           0xxxxxxx, 110xxxxx, 10xxxxxx, 1110xxxx, 10xxxxxx, 10xxxxxx, 10xxxxxx, 1111xxxx,
+    # initial_lengths: 1       , 2,      , 0       , 3,      , 0       , 0       , 0       , 4
+    # right1           ?       , 0       , 1       , 0       , 2,      , 0       , 0       , 0
     var sum = initial_lengths + right1
+    # sum              ?       , 2       , 1       , 3       , 2,      , 0       , 0       , 4
+
     var right2 = subtract_with_saturation[2](
-        _mm_alignr_epi8[16 - 2](sum, previous_carries)
+        _mm_alignr_epi8[VECTOR_SIZE - 2](sum, previous_carries)
     )
+    # right2           ?       , ?       , ?       , 0       , 0,      , 1       , 0       , 0
     return sum + right2
+    # return           ?       , ?       , ?       , 3       , 2,      , 1       , 0       , 4
+    #                                                           0 means error    ^^^^^^^^^
 
 
 @always_inline
@@ -208,8 +224,8 @@ fn check_overlong(
     F       => < F1 && < 90
     else      false && false
     """
-    var off1_hibits = _mm_alignr_epi8[16 - 1](hibits, previous_hibits)
-    alias table1 = BytesVector(
+    var off1_hibits = _mm_alignr_epi8[VECTOR_SIZE - 1](hibits, previous_hibits)
+    alias table1 = SIMD[DType.uint8, 16](
         0x80,
         0x80,
         0x80,
@@ -229,7 +245,7 @@ fn check_overlong(
     )
     var initial_mins = simd_table_lookup(table1, off1_hibits).cast[DType.int8]()
     var initial_under = off1_current_bytes.cast[DType.int8]() < initial_mins
-    alias table2 = BytesVector(
+    alias table2 = SIMD[DType.uint8, 16](
         0x80,
         0x80,
         0x80,
@@ -268,7 +284,7 @@ fn check_utf8_bytes(
     )
 
     check_continuations(initial_lengths, pb.carried_continuations, has_error)
-    var off1_current_bytes = _mm_alignr_epi8[16 - 1](
+    var off1_current_bytes = _mm_alignr_epi8[VECTOR_SIZE - 1](
         pb.raw_bytes, previous.raw_bytes
     )
     check_first_continuation_max(current_bytes, off1_current_bytes, has_error)
@@ -281,6 +297,13 @@ fn check_utf8_bytes(
     )
 
     return pb
+
+
+fn get_last_carried_continuation_check_vector() -> BytesVector:
+    """Returns a vector (9, 9, 9, 9, ... 9, 9, 9, 1)."""
+    result = BytesVector(9)
+    result[VECTOR_SIZE - 1] = 1
+    return result
 
 
 @no_inline
@@ -302,7 +325,8 @@ fn validate_utf8_fast(source: UnsafePointer[UInt8], length: Int) -> Bool:
             buffer[j - i] = (source + j)[]
         previous = check_utf8_bytes(buffer, previous, has_error)
     else:
-        alias base = BytesVector(9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 1)
+        # Just check that the last carried_continuations is 1 or 0
+        alias base = get_last_carried_continuation_check_vector()
         var comparison = previous.carried_continuations > base
         has_error |= comparison
 
