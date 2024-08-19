@@ -30,18 +30,61 @@ struct ProcessedUtfBytes:
 
 
 @always_inline
-fn _mm_shuffle_epi8(
-    lookup_table: SIMD[DType.uint8, 16], indices: SIMD[DType.uint8, 16]
-) -> SIMD[DType.uint8, 16]:
+fn simd_table_lookup[
+    input_vector_size: Int
+](
+    lookup_table: SIMD[DType.uint8, 16],
+    indices: SIMD[DType.uint8, input_vector_size],
+) -> SIMD[DType.uint8, input_vector_size]:
     """The equivalent of https://doc.rust-lang.org/core/arch/x86_64/fn._mm_shuffle_epi8.html .
+
+    For simplicity, we'll assume that unlike the rust version, the lookup table is always 16 bytes long
+    and only the 4 least significant bits of the indices are set on each byte of the indices.
+    Otherwise the behavior is undefined.
     """
-    constrained[sys.has_sse4(), "should have sse4"]()
-    var result = sys.llvm_intrinsic[
-        "llvm.x86.ssse3.pshuf.b.128",
-        SIMD[DType.uint8, 16],
-        has_side_effect=False,
-    ](lookup_table, indices)
-    return result
+
+    @parameter
+    if sys.has_sse4() and input_vector_size == 16:
+        return sys.llvm_intrinsic[
+            "llvm.x86.ssse3.pshuf.b.128",
+            SIMD[DType.uint8, input_vector_size],
+            has_side_effect=False,
+        ](lookup_table, indices)
+    else:
+        # Slow path, ~3x slower than pshuf for size 16
+        var result = SIMD[DType.uint8, input_vector_size]()
+
+        @parameter
+        for i in range(0, input_vector_size):
+            result[i] = lookup_table[int(indices[i])]
+        return result
+
+
+def test_simd_table_lookup():
+    var lookup_table = SIMD[DType.uint8, 16](
+        0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150
+    )
+    var indices = SIMD[DType.uint8, 16](
+        3, 3, 5, 5, 7, 7, 9, 9, 11, 11, 13, 13, 15, 15, 0, 1
+    )
+    result = simd_table_lookup(lookup_table, indices)
+    expected_result = SIMD[DType.uint8, 16](
+        30, 30, 50, 50, 70, 70, 90, 90, 110, 110, 130, 130, 150, 150, 0, 10
+    )
+    assert_true((result == expected_result).reduce_and())
+
+
+def test_simd_table_lookup_size_8():
+    var lookup_table = SIMD[DType.uint8, 16](
+        0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150
+    )
+
+    # Let's use size 8
+    indices = SIMD[DType.uint8, 8](3, 3, 5, 5, 7, 7, 9, 0)
+
+    result = simd_table_lookup(lookup_table, indices)
+    expected_result = SIMD[DType.uint8, 8](30, 30, 50, 50, 70, 70, 90, 0)
+    assert_true((result == expected_result).reduce_and())
 
 
 @always_inline
@@ -101,7 +144,7 @@ fn continuation_lengths(high_nibbles: BytesVector) -> BytesVector:
         4,  # 1111, next should be 0 (not checked here)
     )
     # Use
-    return _mm_shuffle_epi8(table_of_continuations, high_nibbles)
+    return simd_table_lookup(table_of_continuations, high_nibbles)
 
 
 @always_inline
@@ -184,7 +227,7 @@ fn check_overlong(
         0xE1,  # 1110
         0xF1,
     )
-    var initial_mins = _mm_shuffle_epi8(table1, off1_hibits).cast[DType.int8]()
+    var initial_mins = simd_table_lookup(table1, off1_hibits).cast[DType.int8]()
     var initial_under = off1_current_bytes.cast[DType.int8]() < initial_mins
     alias table2 = BytesVector(
         0x80,
@@ -204,7 +247,7 @@ fn check_overlong(
         0xA0,  # 1110
         0x90,
     )
-    var second_mins = _mm_shuffle_epi8(table2, off1_hibits).cast[DType.int8]()
+    var second_mins = simd_table_lookup(table2, off1_hibits).cast[DType.int8]()
     var second_under = current_bytes.cast[DType.int8]() < second_mins
     has_error |= initial_under & second_under
 
