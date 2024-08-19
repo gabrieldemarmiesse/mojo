@@ -110,6 +110,83 @@ def test_simd_table_lookup_size_8():
     assert_true((result == expected_result).reduce_and())
 
 
+def test_simd_table_lookup_size_32():
+    var table_lookup = SIMD[DType.uint8, 16](
+        0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150
+    )
+    var indices = SIMD[DType.uint8, 32](
+        3,
+        3,
+        5,
+        5,
+        7,
+        7,
+        9,
+        9,
+        11,
+        11,
+        13,
+        13,
+        15,
+        15,
+        0,
+        1,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+    )
+    result = simd_table_lookup(table_lookup, indices)
+
+    expected_result = SIMD[DType.uint8, 32](
+        30,
+        30,
+        50,
+        50,
+        70,
+        70,
+        90,
+        90,
+        110,
+        110,
+        130,
+        130,
+        150,
+        150,
+        0,
+        10,
+        0,
+        10,
+        20,
+        30,
+        40,
+        50,
+        60,
+        70,
+        80,
+        90,
+        100,
+        110,
+        120,
+        130,
+        140,
+        150,
+    )
+    assert_true((result == expected_result).reduce_and())
+
+
 @always_inline
 fn _mm_alignr_epi8[count: Int](a: BytesVector, b: BytesVector) -> BytesVector:
     """The equivalent of https://doc.rust-lang.org/core/arch/x86_64/fn._mm_alignr_epi8.html .
