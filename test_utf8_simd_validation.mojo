@@ -17,7 +17,7 @@ import sys
 from testing import assert_true, assert_false
 import benchmark
 
-alias VECTOR_SIZE = 16
+alias VECTOR_SIZE = 32
 alias BytesVector = SIMD[DType.uint8, VECTOR_SIZE]
 alias BoolsVector = SIMD[DType.bool, VECTOR_SIZE]
 
@@ -27,6 +27,16 @@ struct ProcessedUtfBytes:
     var raw_bytes: BytesVector
     var high_nibbles: BytesVector
     var carried_continuations: BytesVector
+
+
+fn pshuf(
+    lookup_table: SIMD[DType.uint8, 16], indices: SIMD[DType.uint8, 16]
+) -> SIMD[DType.uint8, 16]:
+    return sys.llvm_intrinsic[
+        "llvm.x86.ssse3.pshuf.b.128",
+        SIMD[DType.uint8, 16],
+        has_side_effect=False,
+    ](lookup_table, indices)
 
 
 @always_inline
@@ -45,19 +55,24 @@ fn simd_table_lookup[
 
     @parameter
     if sys.has_sse4() and input_vector_size == 16:
-        return sys.llvm_intrinsic[
-            "llvm.x86.ssse3.pshuf.b.128",
-            SIMD[DType.uint8, input_vector_size],
-            has_side_effect=False,
-        ](lookup_table, indices)
-    # elif sys.has_avx2() and input_vector_size == 32:
-    #    var lookup_table_for_vpshufb = lookup_table.join(lookup_table)
-    #    return sys.llvm_intrinsic[
-    #        "llvm.x86.avx2.vpshufb",
-    #        SIMD[DType.uint8, input_vector_size],
-    #        has_side_effect=False,
-    #    ](lookup_table_for_vpshufb, indices)
-
+        # The compiler isn't very smart yet. Let's help it a bit and hope it
+        # understands this is a no-op. So far there wasn't any performance
+        # drop likely indicating that the compiler is doing the right thing.
+        # we would need to look at the assembly to be sure.
+        var copy_indices = indices.slice[16, offset=0]()  # no-op
+        var result = pshuf(lookup_table, copy_indices)
+        return result.slice[input_vector_size, offset=0]()  # no-op
+    elif sys.has_sse4() and input_vector_size == 32:
+        # We split it in two and call the 16 version twice.
+        var first_indices_batch = indices.slice[16, offset=0]()
+        var second_indices_batch = indices.slice[16, offset=16]()
+        var first_result = simd_table_lookup(lookup_table, first_indices_batch)
+        var second_result = simd_table_lookup(
+            lookup_table, second_indices_batch
+        )
+        var result = first_result.join(second_result)
+        # no-op but needed for the type checker
+        return result.slice[input_vector_size, offset=0]()
     else:
         # Slow path, ~3x slower than pshuf for size 16
         var result = SIMD[DType.uint8, input_vector_size]()
@@ -174,7 +189,6 @@ fn carry_continuations(
     # right2           ?       , ?       , ?       , 0       , 0,      , 1       , 0       , 0
     return sum + right2
     # return           ?       , ?       , ?       , 3       , 2,      , 1       , 0       , 4
-    #                                                           0 means error    ^^^^^^^^^
 
 
 @always_inline
@@ -490,8 +504,9 @@ fn benchmark_big_string():
 
 
 def main():
-    # print(sys.has_avx(), "have sse4")
-    # print(sys.has_avx2(), "have avx2")
+    print(sys.has_avx(), "have sse4")
+    print(sys.has_avx2(), "have avx2")
+    print(sys.simdbytewidth(), "simd byte width")
     #
     # test_good_sequences()
     # test_bad_sequences()
