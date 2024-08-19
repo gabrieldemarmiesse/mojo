@@ -11,6 +11,11 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
+
+# References:
+# https://github.com/lemire/fastvalidate-utf-8/blob/master/include/simdutf8check.h
+# https://arxiv.org/abs/2010.03090
+
 from memory import memcpy
 from sys._assembly import inlined_assembly
 import sys
@@ -606,14 +611,5 @@ def main():
     print(sys.has_avx2(), "have avx2")
     print(sys.has_avx512f(), "have avx512f")
     print(sys.simdbytewidth(), "simd byte width")
-    #
-    # test_good_sequences()
-    # test_bad_sequences()
-    # test_combinaison_good_sequences()
-    # test_combinaison_bad_sequences()
-    # test_combinaison_good_bad_sequences()
-    # test_combinaison_10_good_sequences()
-    # test_combinaison_10_good_10_bad_sequences()
-    # print("All tests passed")
 
     benchmark_big_string()
