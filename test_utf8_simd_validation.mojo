@@ -74,7 +74,7 @@ fn simd_table_lookup[
         # no-op but needed for the type checker
         return result.slice[input_vector_size, offset=0]()
     elif sys.has_sse4() and input_vector_size == 64:
-        # We split it in two and call the 16 version 4 times.
+        # We split it in 4 and call the 16  bytes version 4 times.
         var first_indices_batch = indices.slice[16, offset=0]()
         var second_indices_batch = indices.slice[16, offset=16]()
         var third_indices_batch = indices.slice[16, offset=32]()
@@ -604,6 +604,7 @@ fn benchmark_big_string():
 def main():
     print(sys.has_avx(), "have sse4")
     print(sys.has_avx2(), "have avx2")
+    print(sys.has_avx512f(), "have avx512f")
     print(sys.simdbytewidth(), "simd byte width")
     #
     # test_good_sequences()
