@@ -610,6 +610,7 @@ def main():
     print(sys.has_avx(), "have sse4")
     print(sys.has_avx2(), "have avx2")
     print(sys.has_avx512f(), "have avx512f")
-    print(sys.simdbytewidth(), "simd byte width")
+    print(sys.simdbytewidth(), "simd byte width available on this cpu")
+    print("benchmarking with a vector size of", VECTOR_SIZE)
 
     benchmark_big_string()
