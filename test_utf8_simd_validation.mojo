@@ -73,6 +73,25 @@ fn simd_table_lookup[
         var result = first_result.join(second_result)
         # no-op but needed for the type checker
         return result.slice[input_vector_size, offset=0]()
+    elif sys.has_sse4() and input_vector_size == 64:
+        # We split it in two and call the 16 version 4 times.
+        var first_indices_batch = indices.slice[16, offset=0]()
+        var second_indices_batch = indices.slice[16, offset=16]()
+        var third_indices_batch = indices.slice[16, offset=32]()
+        var fourth_indices_batch = indices.slice[16, offset=48]()
+        var first_result = simd_table_lookup(lookup_table, first_indices_batch)
+        var second_result = simd_table_lookup(
+            lookup_table, second_indices_batch
+        )
+        var third_result = simd_table_lookup(lookup_table, third_indices_batch)
+        var fourth_result = simd_table_lookup(
+            lookup_table, fourth_indices_batch
+        )
+        var first_half = first_result.join(second_result)
+        var second_half = third_result.join(fourth_result)
+        var result = first_half.join(second_half)
+        # no-op but needed for the type checker
+        return result.slice[input_vector_size, offset=0]()
     else:
         # Slow path, ~3x slower than pshuf for size 16
         var result = SIMD[DType.uint8, input_vector_size]()
