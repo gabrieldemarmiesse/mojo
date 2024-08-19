@@ -407,6 +407,8 @@ fn validate_utf8_fast(source: UnsafePointer[UInt8], length: Int) -> Bool:
     while i + VECTOR_SIZE <= length:
         var current_bytes = (source + i).load[width=VECTOR_SIZE]()
         previous = check_utf8_bytes(current_bytes, previous, has_error)
+        if has_error.reduce_or():
+            return False
         i += VECTOR_SIZE
 
     # last part
