@@ -896,10 +896,10 @@ fn create_float64(m: UInt64, p: Int64) -> Float64:
     print("x:", bin(p + 1023)[2:], len(bin(p + 1023)) - 2)
     var m_mask = UInt64(2 ** 52 - 1)
     var representation_as_int = (m & m_mask) | ((p + 1023).cast[DType.uint64]() << 52)
-#
+
     ## print the binary representation of the float
     print("r:", bin(representation_as_int)[2:], len(bin(representation_as_int)) - 2)
-#
+
     return UnsafePointer.address_of(representation_as_int).bitcast[Float64]()[]
 
 
@@ -1001,6 +1001,7 @@ fn my_atof(owned x: String) raises -> Float64:
     return result * sign
 
 alias numbers_to_test_as_str = List[String](
+    "5e-60",
     "5e30",
     "47421763.54884", 
     "474217635486486e10",
@@ -1013,6 +1014,7 @@ alias numbers_to_test_as_str = List[String](
     "0.3",
 )
 alias numbers_to_test = List[Float64](
+    5e-60,
     5e30,
     47421763.54884, 
     474217635486486e10,
@@ -1033,13 +1035,10 @@ def test_custom_atof():
                 for multiplier in List("", "-"):
                     var sign:Float64 = 1
                     if multiplier[] == "-":
-                        print("negative!")
                         sign = -1
                     final_string = multiplier[] + numbers_to_test_as_str[i].replace("e", exponent[]) + suffix[]
                     final_value =   sign * numbers_to_test[i]
-
-                    print("final string:", final_string)
-                    print("final value:", final_value)
+            
                     assert_equal(
                         my_atof(final_string), final_value
                     )
