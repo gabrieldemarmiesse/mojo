@@ -27,7 +27,8 @@ from python import PythonObject
 from utils import Span, StaticIntTuple, StringRef, StringSlice, Variant
 from utils._format import Formattable, Formatter, ToFormatter
 from utils.string_slice import _utf8_byte_type, _StringSliceIter
-from .parsing_numbers.parsing_floats import atof
+from ._parsing_numbers.parsing_floats import atof
+
 # ===----------------------------------------------------------------------=== #
 # ord
 # ===----------------------------------------------------------------------=== #
@@ -402,7 +403,6 @@ fn atol(str: String, base: Int = 10) raises -> Int:
         An integer value that represents the string, or otherwise raises.
     """
     return _atol(str._strref_dangerous(), base)
-
 
 
 # ===----------------------------------------------------------------------=== #
