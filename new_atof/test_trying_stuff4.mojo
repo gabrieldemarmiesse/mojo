@@ -1010,6 +1010,7 @@ alias numbers_to_test_as_str = List[String](
     "1e-45",                 # subnormal, smallest value possible
     "3e-45",                 # subnormal
     "4e-45",                 # subnormal
+    "3.4028235e38",          # largest value possible
     "456.7891011e70",        # Lemire algorithm
     "inf",                   # infinity
     "5e-600",                # approximate to 0
@@ -1031,6 +1032,7 @@ alias numbers_to_test = List[Float64](
     1e-45,
     3e-45,
     4e-45,
+    3.4028235e38,
     456.7891011e70,
     FloatLiteral.infinity,
     0.0,
