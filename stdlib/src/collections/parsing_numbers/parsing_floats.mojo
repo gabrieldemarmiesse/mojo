@@ -112,6 +112,12 @@ fn _get_w_and_q_from_float_string(input_string: StringSlice) raises -> Tuple[Int
     var array_index = std_size
     var buffer = input_string.unsafe_ptr()
 
+    if not (ord_0 <=buffer[0] <= ord_9) and buffer[0] != ord_dot:
+        raise Error("The first character of '" + String(input_string) + "' should be a digit or dot to convert it to a float.")
+
+    if not (ord_0 <= buffer[len(input_string) - 1] <= ord_9) and buffer[len(input_string) - 1] != ord_dot:
+        raise Error("The last character of '" + String(input_string) + "' should be a digit or dot to convert it to a float.")
+
     var dot_or_e_found = False
 
     for i in range(len(input_string)-1, -1, -1):
@@ -159,6 +165,7 @@ fn strip_unused_characters(x: String) -> String:
     result = x.strip()
     result = result.removesuffix("f")
     result = result.removesuffix("F")
+    result = result.removeprefix("+")
     return result
 
 fn get_sign(x: String) -> Tuple[Float64, String]:
@@ -301,7 +308,7 @@ fn _atof_error(str_ref: StringSlice) raises:
     raise Error("String is not convertible to float: '" + str(str_ref) + "'")
 
 
-fn atof(owned x: String) raises -> Float64:
+fn atof(x: String) raises -> Float64:
     """Parses the given string as a floating point and returns that value.
 
     For example, `atof("2.25")` returns `2.25`.
@@ -318,18 +325,20 @@ fn atof(owned x: String) raises -> Float64:
     """
     if x == "":
         _atof_error(x.as_string_slice())
-    x = strip_unused_characters(x)
-    sign_and_x = get_sign(x)
-    sign = sign_and_x[0]
-    x = sign_and_x[1]
+    var stripped = strip_unused_characters(x)
+    sign_and_stripped = get_sign(stripped)
+    sign = sign_and_stripped[0]
+    stripped = sign_and_stripped[1]
 
-    if x == "nan":
+    if stripped == "nan":
         return FloatLiteral.nan
-    if x == "in": # f was removed previously
+    if stripped == "in": # f was removed previously
         return FloatLiteral.infinity * sign
-
-    
-    var w_and_q = _get_w_and_q_from_float_string(x.as_string_slice())
+    var w_and_q: Tuple[Int, Int]
+    try:
+        w_and_q = _get_w_and_q_from_float_string(stripped.as_string_slice())
+    except e:
+        raise Error("String is not convertible to float: '" + str(x) + "'. " + str(e))
     var w = w_and_q[0]
     var q = w_and_q[1]
     
