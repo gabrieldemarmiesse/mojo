@@ -1,5 +1,7 @@
 from collections import InlineArray
 
+# TODO: Generate those at compile-time when the interpreter
+# is able to do so.
 alias powers_of_10 = InlineArray[Float64, 23](
         1,
         10,
