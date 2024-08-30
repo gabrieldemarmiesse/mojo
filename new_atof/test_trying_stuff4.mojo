@@ -5,6 +5,7 @@ from collections import InlineArray
 from memory import memcpy, memcmp
 from testing import assert_equal
 import bit
+import random
 
 # fmt: off
 fn get_power_of_5(index: Int) -> UInt64:
@@ -725,13 +726,17 @@ fn to_integer(x: String) raises -> Int:
 
 fn to_integer(x: StringSlice) raises -> Int:
     if len(x) > len(maximum_int_as_str):
-        raise Error("The string size too big." + str(x))
+        raise Error("The string size too big. '" + str(x) + "'")
     return to_integer(standardize_string_slice(x))
 
 fn to_integer(standardized_x: InlineArray[UInt8, size=std_size]) raises -> Int:
     for i in range(std_size):
         if not (UInt8(ord("0")) <= standardized_x[i] <= UInt8(ord("9"))):
-            raise Error("Invalid character in the number.")
+            # We make a string out of this number.
+            number_as_string = List[UInt8](std_size)
+            for j in range(std_size):
+                number_as_string.append(standardized_x[j])
+            raise Error("Invalid character in the number. '" + String(number_as_string) + "'")
 
     # We assume there are no leading or trailing whitespaces, no leading zeros, no sign.
     # We could compute all those aliases at compile time, by knowing the size of int, simd width, 
@@ -774,6 +779,7 @@ fn _get_w_and_q_from_float_string(input_string: StringSlice) raises -> Tuple[Int
     alias ord_9 = UInt8(ord("9"))
     alias ord_dot = UInt8(ord("."))
     alias ord_minus = UInt8(ord("-"))
+    alias ord_plus = UInt8(ord("+"))
     alias ord_e = UInt8(ord("e"))
     alias ord_E = UInt8(ord("E"))
 
@@ -793,7 +799,7 @@ fn _get_w_and_q_from_float_string(input_string: StringSlice) raises -> Tuple[Int
     for i in range(len(input_string)-1, -1, -1):
         array_index -= 1
         if array_index < 0:
-            raise Error("The number is too big.")
+            raise Error("The number is too big. '" + String(input_string) + "'")
         if buffer[i] == ord_dot:
             dot_or_e_found = True
             if prt_to_array == UnsafePointer.address_of(exponent):
@@ -808,6 +814,9 @@ fn _get_w_and_q_from_float_string(input_string: StringSlice) raises -> Tuple[Int
         elif buffer[i] == ord_minus:
             # Next should be the E letter (or e), so we'll just continue.
             exponent_multiplier = -1
+        elif buffer[i] == ord_plus:
+            # Next should be the E letter (or e), so we'll just continue.
+            pass
         elif buffer[i] == ord_e or buffer[i] == ord_E:
             dot_or_e_found = True
             # We finished writing the exponent.
@@ -816,7 +825,7 @@ fn _get_w_and_q_from_float_string(input_string: StringSlice) raises -> Tuple[Int
         elif (ord_0 <= buffer[i]) and (buffer[i] <= ord_9):
             prt_to_array[][array_index] = buffer[i]
         else:
-            raise Error("Invalid character in the number.")
+            raise Error("Invalid character in the number. '" + String(input_string) + "'")
 
     if not dot_or_e_found:
         # We were reading the significand
@@ -888,17 +897,9 @@ fn get_128_bit_truncated_product(w: UInt64, q: Int64) -> UInt128:
 
 
 fn create_float64(m: UInt64, p: Int64) -> Float64:
-    if not (UInt64(2 ** 52) <= m < UInt64(2 ** 53)):
-        print("m not in range")
-    print("m:", m, "p:", p)
-    print("m:", bin(m)[2:], len(bin(m)) - 2)
-    print("p:", bin(p)[2:], len(bin(p)) - 2)
-    print("x:", bin(p + 1023)[2:], len(bin(p + 1023)) - 2)
+ 
     var m_mask = UInt64(2 ** 52 - 1)
     var representation_as_int = (m & m_mask) | ((p + 1023).cast[DType.uint64]() << 52)
-
-    ## print the binary representation of the float
-    print("r:", bin(representation_as_int)[2:], len(bin(representation_as_int)) - 2)
 
     return UnsafePointer.address_of(representation_as_int).bitcast[Float64]()[]
 
@@ -907,7 +908,6 @@ fn create_float64(m: UInt64, p: Int64) -> Float64:
 fn lemire_algorithm(owned w: UInt64, owned q: Int64) -> Float64:
     # This algorithm has 22 steps described 
     # in https://arxiv.org/pdf/2101.11408 (algorithm 1)
-    print("w:", w, "q:", q)
     # Step 1
     if w == 0 or q < -342:
         return 0.0
@@ -962,12 +962,12 @@ fn lemire_algorithm(owned w: UInt64, owned q: Int64) -> Float64:
 
     # step 19
     if m % 2 == 1:
-        print("odd")
         m += 1
     m //= 2
 
     # Step 20
     if m == 2 **53:
+        print("in step 20")
         m //=2
         p = p + 1
 
@@ -985,7 +985,6 @@ fn my_atof(owned x: String) raises -> Float64:
     sign_and_x = get_sign(x)
     sign = sign_and_x[0]
     x = sign_and_x[1]
-    print(x)
 
     if x == "nan":
         return FloatLiteral.nan
@@ -1010,6 +1009,7 @@ alias numbers_to_test_as_str = List[String](
     "3e-45",                 # subnormal
     "4e-45",                 # subnormal
     "3.4028235e38",          # largest value possible
+    "15038927332917.156",     # triggers step 19
     "9000000000000000.5",    # tie to even
     "456.7891011e70",        # Lemire algorithm
     "inf",                   # infinity
@@ -1033,6 +1033,7 @@ alias numbers_to_test = List[Float64](
     3e-45,
     4e-45,
     3.4028235e38,
+    15038927332917.156,
     9000000000000000.5,
     456.7891011e70,
     FloatLiteral.infinity,
@@ -1072,9 +1073,21 @@ def test_custom_atof():
                         my_atof(final_string), final_value
                     )
 
+def test_random_values():
+    random.seed(27)
+    for i in range(-400, 400):
+        var limit: Float64 = 10 ** i
+        for j in range(100):
+            var a = random.random_float64(-limit, limit)
+            var a_str = str(a)
+            print("a", a)
+            print(a_str)
+            assert_equal(my_atof(a_str), a)
+
 def main():
 
     test_custom_atof()
+    #test_random_values()
     print("All tests passed.")
 
     
