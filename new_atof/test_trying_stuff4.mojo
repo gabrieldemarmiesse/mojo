@@ -986,6 +986,12 @@ fn my_atof(owned x: String) raises -> Float64:
     sign_and_x = get_sign(x)
     sign = sign_and_x[0]
     x = sign_and_x[1]
+    print(x)
+
+    if x == "nan":
+        return FloatLiteral.nan
+    if x == "in": # f was removed previously
+        return FloatLiteral.infinity * sign
 
     
     var w_and_q = _get_w_and_q_from_float_string(x.as_string_slice())
@@ -1001,6 +1007,10 @@ fn my_atof(owned x: String) raises -> Float64:
     return result * sign
 
 alias numbers_to_test_as_str = List[String](
+    "456.7891011e70",
+    "inf",
+    "5e-600",
+    "5e1000",
     "5e-60",
     "5e30",
     "47421763.54884", 
@@ -1014,6 +1024,10 @@ alias numbers_to_test_as_str = List[String](
     "0.3",
 )
 alias numbers_to_test = List[Float64](
+    456.7891011e70,
+    FloatLiteral.infinity,
+    0.0,
+    FloatLiteral.infinity,
     5e-60,
     5e30,
     47421763.54884, 
@@ -1036,7 +1050,11 @@ def test_custom_atof():
                     var sign:Float64 = 1
                     if multiplier[] == "-":
                         sign = -1
-                    final_string = multiplier[] + numbers_to_test_as_str[i].replace("e", exponent[]) + suffix[]
+                    final_string = numbers_to_test_as_str[i].replace("e", exponent[])
+                    if final_string != "nan":
+                        final_string = multiplier[] + final_string
+                        if not final_string.endswith("inf"):
+                            final_string += suffix[]
                     final_value =   sign * numbers_to_test[i]
             
                     assert_equal(
