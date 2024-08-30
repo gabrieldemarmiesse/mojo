@@ -17,7 +17,7 @@ from collections import InlineArray
 # is able to do so.
 
 alias std_size = 24
-alias maximum_int_as_str = "9223372036854775807"
+alias maximum_uint64_as_str = "18446744073709551615"
 alias mantissa_explicit_bits = 52
 alias smallest_power_of_five = -342
 

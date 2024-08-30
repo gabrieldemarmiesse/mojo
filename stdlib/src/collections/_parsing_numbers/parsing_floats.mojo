@@ -52,8 +52,13 @@ struct UInt128:
 
 fn _get_w_and_q_from_float_string(
     input_string: StringSlice,
-) raises -> Tuple[Int, Int]:
+) raises -> Tuple[UInt64, Int64]:
     """We suppose the number is in the form '123.2481' or '123' or '123e-2' or '12.3e2'.
+
+    Returns a tuple (w, q) where w is the significand and q is the exponent.
+    w is an unsigned integer and q is a signed integer. (64 bits each)
+
+    "123.2481e-5" -> (1232481, -9)
     """
     # We read the number from right to left.
     alias ord_0 = UInt8(ord("0"))
@@ -138,7 +143,7 @@ fn _get_w_and_q_from_float_string(
         exponent_multiplier * to_integer(exponent) - additional_exponent
     )
     significand_as_integer = to_integer(significand)
-    return (significand_as_integer, exponent_as_integer)
+    return (significand_as_integer, exponent_as_integer.cast[DType.int64]())
 
 
 fn strip_unused_characters(x: String) -> String:
@@ -157,15 +162,15 @@ fn get_sign(x: String) -> Tuple[Float64, String]:
 
 # Powers of 10 and integers below 2**53 are exactly representable as Float64.
 # Thus any operation done on them must be exact.
-fn can_use_clinger_fast_path(w: Int, q: Int) -> Bool:
-    return w <= 2**53 and (-22 <= q <= 22)
+fn can_use_clinger_fast_path(w: UInt64, q: Int64) -> Bool:
+    return w <= UInt64(2**53) and (Int64(-22) <= q <= Int64(22))
 
 
-fn clinger_fast_path(w: Int, q: Int) -> Float64:
+fn clinger_fast_path(w: UInt64, q: Int64) -> Float64:
     if q >= 0:
-        return Float64(w) * powers_of_10[q]
+        return w.cast[DType.float64]() * powers_of_10[int(q)]
     else:
-        return Float64(w) / powers_of_10[-q]
+        return w.cast[DType.float64]() / powers_of_10[int(-q)]
 
 
 fn full_multiplication(x: UInt64, y: UInt64) -> UInt128:
@@ -317,7 +322,7 @@ fn atof(x: String) raises -> Float64:
         return FloatLiteral.nan
     if stripped == "in":  # f was removed previously
         return FloatLiteral.infinity * sign
-    var w_and_q: Tuple[Int, Int]
+    var w_and_q: Tuple[UInt64, Int64]
     try:
         w_and_q = _get_w_and_q_from_float_string(stripped.as_string_slice())
     except e:
