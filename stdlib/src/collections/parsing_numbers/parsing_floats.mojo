@@ -54,7 +54,7 @@ fn to_integer(standardized_x: InlineArray[UInt8, size=std_size]) raises -> Int:
             number_as_string = List[UInt8](std_size)
             for j in range(std_size):
                 number_as_string.append(standardized_x[j])
-            raise Error("Invalid character in the number. '" + String(number_as_string) + "'")
+            raise Error("Invalid character(s) in the number: '" + String(number_as_string) + "'")
 
     # We assume there are no leading or trailing whitespaces, no leading zeros, no sign.
     # We could compute all those aliases at compile time, by knowing the size of int, simd width, 
@@ -143,7 +143,7 @@ fn _get_w_and_q_from_float_string(input_string: StringSlice) raises -> Tuple[Int
         elif (ord_0 <= buffer[i]) and (buffer[i] <= ord_9):
             prt_to_array[][array_index] = buffer[i]
         else:
-            raise Error("Invalid character in the number. '" + String(input_string) + "'")
+            raise Error("Invalid character(s) in the number: '" + String(input_string) + "'")
 
     if not dot_or_e_found:
         # We were reading the significand
@@ -297,6 +297,9 @@ fn lemire_algorithm(owned w: UInt64, owned q: Int64) -> Float64:
     return create_float64(m, p)
 
 
+fn _atof_error(str_ref: StringSlice) raises:
+    raise Error("String is not convertible to float: '" + str(str_ref) + "'")
+
 
 fn atof(owned x: String) raises -> Float64:
     """Parses the given string as a floating point and returns that value.
@@ -313,6 +316,8 @@ fn atof(owned x: String) raises -> Float64:
     Returns:
         An floating point value that represents the string, or otherwise raises.
     """
+    if x == "":
+        _atof_error(x.as_string_slice())
     x = strip_unused_characters(x)
     sign_and_x = get_sign(x)
     sign = sign_and_x[0]

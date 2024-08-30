@@ -520,7 +520,7 @@ def test_atof():
         _ = atof(String(""))
 
     with assert_raises(
-        contains="String is not convertible to float: ' 123 asd'"
+        contains="Invalid character(s) in the number: '123 asd'"
     ):
         _ = atof(String(" 123 asd"))
 
@@ -530,12 +530,12 @@ def test_atof():
         _ = atof(String(" f.9123 "))
 
     with assert_raises(
-        contains="String is not convertible to float: ' 989343E-1A3 '"
+        contains="Invalid character(s) in the number: '989343E-1A3 '"
     ):
         _ = atof(String(" 989343E-1A3 "))
 
     with assert_raises(
-        contains="String is not convertible to float: ' 124124124_2134124124 '"
+        contains="Invalid character(s) in the number: '124124124_2134124124 '"
     ):
         _ = atof(String(" 124124124_2134124124 "))
 
