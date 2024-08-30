@@ -957,9 +957,8 @@ fn lemire_algorithm(owned w: UInt64, owned q: Int64) -> Float64:
     # Step 16-18
     # Round ties to even
     if product.low <= 1 and (m & 3 == 1) and (Int64(-4) <= q <= Int64(23)):
-        print("rounding")
         if bit.pop_count(product.high // m) == 1:
-            m -= 1
+            m -= 2
 
     # step 19
     if m % 2 == 1:
@@ -1011,6 +1010,7 @@ alias numbers_to_test_as_str = List[String](
     "3e-45",                 # subnormal
     "4e-45",                 # subnormal
     "3.4028235e38",          # largest value possible
+    "9000000000000000.5",    # tie to even
     "456.7891011e70",        # Lemire algorithm
     "inf",                   # infinity
     "5e-600",                # approximate to 0
@@ -1033,6 +1033,7 @@ alias numbers_to_test = List[Float64](
     3e-45,
     4e-45,
     3.4028235e38,
+    9000000000000000.5,
     456.7891011e70,
     FloatLiteral.infinity,
     0.0,
