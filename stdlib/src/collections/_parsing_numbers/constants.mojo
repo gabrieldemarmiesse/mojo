@@ -15,6 +15,12 @@ from collections import InlineArray
 
 # TODO: Generate those at compile-time when the interpreter
 # is able to do so.
+
+alias std_size = 24
+alias maximum_int_as_str = "9223372036854775807"
+alias mantissa_explicit_bits = 52
+alias smallest_power_of_five = -342
+
 alias powers_of_10 = InlineArray[Float64, 23](
     1,
     10,
