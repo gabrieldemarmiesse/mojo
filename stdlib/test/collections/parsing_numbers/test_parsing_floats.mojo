@@ -37,8 +37,20 @@ alias numbers_to_test_as_str = List[String](
     "0.1",  # Clinger fast path
     "0.2",  # Clinger fast path
     "0.3",  # Clinger fast path
+    # Examples for issue https://github.com/modularml/mojo/issues/3419
+    "3.5e18",
+    "3.5e19",
+    "3.5e20",
+    "3.5e21",
+    "3.5e-15",
+    "3.5e-16",
+    "3.5e-17",
+    "3.5e-18",
+    "3.5e-19",
+    "47421763.54864864647",
+    # TODO: Make atof work when many digits are present, e.g.
+    # "47421763.548648646474532187448684",
 )
-# TODO add tests from issue
 alias numbers_to_test = List[Float64](
     1e-45,
     3e-45,
@@ -62,6 +74,16 @@ alias numbers_to_test = List[Float64](
     0.1,
     0.2,
     0.3,
+    3.5e18,
+    3.5e19,
+    3.5e20,
+    3.5e21,
+    3.5e-15,
+    3.5e-16,
+    3.5e-17,
+    3.5e-18,
+    3.5e-19,
+    47421763.54864864647,
 )
 
 
