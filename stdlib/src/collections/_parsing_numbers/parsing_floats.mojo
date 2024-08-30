@@ -12,7 +12,14 @@
 # ===----------------------------------------------------------------------=== #
 
 """
+Implementation of the following papers:
+- Number Parsing at a Gigabyte per Second by Daniel Lemire
+  - https://arxiv.org/abs/2101.11408
+- Fast Number Parsing Without Fallback by Noble Mushtak & Daniel Lemire
+  - https://arxiv.org/abs/2212.06644
 
+The reference implementation used was the one in C# and can be found here:
+- https://github.com/CarlVerret/csFastFloat
 """
 
 import sys
@@ -273,7 +280,6 @@ fn lemire_algorithm(owned w: UInt64, owned q: Int64) -> Float64:
 
     # Step 20
     if m == 2**53:
-        print("in step 20")
         m //= 2
         p = p + 1
 
