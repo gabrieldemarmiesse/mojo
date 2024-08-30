@@ -1007,28 +1007,36 @@ fn my_atof(owned x: String) raises -> Float64:
     return result * sign
 
 alias numbers_to_test_as_str = List[String](
-    "456.7891011e70",
-    "inf",
-    "5e-600",
-    "5e1000",
-    "5e-60",
-    "5e30",
-    "47421763.54884", 
-    "474217635486486e10",
-    "474217635486486e-10", 
-    "474217635486486e-20",
-    "4e-22",
-    "4.5e15",
-    "0.1",
-    "0.2",
-    "0.3",
+    "1e-45",                 # subnormal, smallest value possible
+    "3e-45",                 # subnormal
+    "4e-45",                 # subnormal
+    "456.7891011e70",        # Lemire algorithm
+    "inf",                   # infinity
+    "5e-600",                # approximate to 0
+    "5e1000",                # approximate to infinity
+    "5484.2155e-38",         # Lemire algorithm
+    "5e-35",                 # Lemire algorithm
+    "5e30",                  # Lemire algorithm
+    "47421763.54884",        # Clinger fast path
+    "474217635486486e10",    # Clinger fast path
+    "474217635486486e-10",   # Clinger fast path
+    "474217635486486e-20",   # Clinger fast path
+    "4e-22",                 # Clinger fast path
+    "4.5e15",                # Clinger fast path
+    "0.1",                   # Clinger fast path
+    "0.2",                   # Clinger fast path
+    "0.3",                   # Clinger fast path
 )
 alias numbers_to_test = List[Float64](
+    1e-45,
+    3e-45,
+    4e-45,
     456.7891011e70,
     FloatLiteral.infinity,
     0.0,
     FloatLiteral.infinity,
-    5e-60,
+    5484.2155e-38,
+    5e-35,
     5e30,
     47421763.54884, 
     474217635486486e10,
