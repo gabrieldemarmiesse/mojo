@@ -21,6 +21,7 @@ from base64 import b64encode
 
 from collections import List
 from sys import simdwidthof
+import bit
 
 # ===----------------------------------------------------------------------===#
 # Utilities
@@ -58,6 +59,209 @@ fn _ascii_to_value(char: String) -> Int:
 # ===----------------------------------------------------------------------===#
 # b64encode
 # ===----------------------------------------------------------------------===#
+
+
+@always_inline
+fn _subtract_with_saturation[
+    simd_size: Int, //, b: Int
+](a: SIMD[DType.uint8, simd_size]) -> SIMD[DType.uint8, simd_size]:
+    """The equivalent of https://doc.rust-lang.org/core/arch/x86_64/fn._mm_subs_epu8.html .
+    This can be a single instruction on some architectures.
+    """
+    alias b_as_vector = SIMD[DType.uint8, simd_size](b)
+    return max(a, b_as_vector) - b_as_vector
+
+
+"""
+| 6-bit Value | ASCII Range | Target index | Offset (6-bit to ASCII) |
+|-------------|-------------|--------------|-------------------------|
+| 0 ... 25    | A ... Z     | 13           | 65                      |
+| 26 ... 51   | a ... z     | 0            | 71                      |
+| 52 ... 61   | 0 ... 9     | 1 ... 10     | -4                      |
+| 62          | +           | 11           | -19                     |
+| 63          | /           | 12           | -16                     |
+"""
+alias UNUSED = 0
+alias TABLE_BASE64_OFFSETS = SIMD[DType.uint8, 16](
+    71, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -19, -16, 65, UNUSED, UNUSED
+)
+
+
+fn _bitcast[
+    new_dtype: DType, new_size: Int
+](owned input: SIMD) -> SIMD[new_dtype, new_size]:
+    print("before bitcast", input)
+    var result = UnsafePointer.address_of(input).bitcast[
+        SIMD[new_dtype, new_size]
+    ]()[]
+    print("after bitcast", result)
+    return result
+
+
+fn b64encode_simd(input_bytes: List[UInt8]) -> String:
+    """Performs base64 encoding on the input string using SIMD instructions.
+
+    Args:
+        input_bytes: The input string.
+
+    Returns:
+        Base64 encoding of the input string.
+    """
+
+    # +1 for the null terminator and +1 to be sure
+    var result = List[UInt8](capacity=int(len(input_bytes) * (4 / 3)) + 2)
+    alias simd_width = 16  # TODO: Make this flexible
+    alias input_simd_width = 12  # 16 * 0.75
+    alias constant_13 = SIMD[DType.uint8, 16](13)
+
+    # TODO: add condition on cpu flags
+    var input_index = 0
+    while input_index + input_simd_width <= len(input_bytes):
+        # We don't want to read past the input buffer
+        var start_of_input_chunk = input_bytes.unsafe_ptr() + input_index
+        alias load_mask = SIMD[DType.bool, 16](
+            True,
+            True,
+            True,
+            True,
+            True,
+            True,
+            True,
+            True,
+            True,
+            True,
+            True,
+            True,
+            False,
+            False,
+            False,
+            False,
+        )
+        alias passthrough = SIMD[DType.uint8, 16](0)
+        # TODO: Only do a masked_load at the end.
+        var input_vector = sys.intrinsics.masked_load(
+            start_of_input_chunk, mask=load_mask, passthrough=passthrough
+        )
+
+        # We reorder the bytes to fall in their correct 4 bytes chunks, 15 is a dummy value
+        alias UNUSED_2 = 15
+        alias shuffle_mask = SIMD[DType.uint8, 16](
+            0, 1, 1, 2, 3, 4, 4, 5, 6, 7, 7, 8, 9, 10, 10, 11
+        )
+        var shuffled_vector = input_vector._dynamic_shuffle(shuffle_mask)
+        print(shuffled_vector)
+
+        # We have 4 different masks to extract each group of 6 bits from the 4 bytes
+        alias mask_1 = SIMD[DType.uint8, 16](
+            0b11111100,
+            0,
+            0,
+            0,
+            0b11111100,
+            0,
+            0,
+            0,
+            0b11111100,
+            0,
+            0,
+            0,
+            0b11111100,
+            0,
+            0,
+            0,
+        )
+        var masked_1 = shuffled_vector & mask_1
+        var shifted_1 = masked_1 >> 2
+
+        alias mask_2 = SIMD[DType.uint8, 16](
+            0b00000011,
+            0b11110000,
+            0,
+            0,
+            0b00000011,
+            0b11110000,
+            0,
+            0,
+            0b00000011,
+            0b11110000,
+            0,
+            0,
+            0b00000011,
+            0b11110000,
+            0,
+            0,
+        )
+        var masked_2 = shuffled_vector & mask_2
+        var masked_2_as_uint16 = _bitcast[DType.uint16, 8](masked_2)
+        var rotated_2 = bit.rotate_bits_right[4](masked_2_as_uint16)
+        var shifted_2 = _bitcast[DType.uint8, 16](rotated_2)
+
+        alias mask_3 = SIMD[DType.uint8, 16](
+            0,
+            0,
+            0b00001111,
+            0b11000000,
+            0,
+            0,
+            0b00001111,
+            0b11000000,
+            0,
+            0,
+            0b00001111,
+            0b11000000,
+            0,
+            0,
+            0b00001111,
+            0b11000000,
+        )
+        var masked_3 = shuffled_vector & mask_3
+        var masked_3_as_uint16 = _bitcast[DType.uint16, 8](masked_3)
+        var rotated_3 = bit.rotate_bits_left[2](masked_3_as_uint16)
+        var shifted_3 = _bitcast[DType.uint8, 16](rotated_3)
+
+        alias mask_4 = SIMD[DType.uint8, 16](
+            0,
+            0,
+            0,
+            0b00111111,
+            0,
+            0,
+            0,
+            0b00111111,
+            0,
+            0,
+            0,
+            0b00111111,
+            0,
+            0,
+            0,
+            0b00111111,
+        )
+        var shifted_4 = shuffled_vector & mask_4
+
+        var ready_to_encode_per_byte = shifted_1 | shifted_2 | shifted_3 | shifted_4
+        print("ready_to_encode", ready_to_encode_per_byte)
+        # See the table above for the offsets, we try to go from 6-bits values to target indexes.
+        var saturated = _subtract_with_saturation[51](ready_to_encode_per_byte)
+
+        var mask_below_25 = ready_to_encode_per_byte <= 25
+
+        # Now are have the target indexes
+        var indices = mask_below_25.select(constant_13, saturated)
+
+        var offsets = TABLE_BASE64_OFFSETS._dynamic_shuffle(indices)
+
+        var result_vector = ready_to_encode_per_byte + offsets
+
+        # We write the result to the output buffer
+        (result.unsafe_ptr() + len(result)).store(result_vector)
+        result.size += simd_width
+        input_index += input_simd_width
+
+    # TODO: Handle the last pieces of the input buffer
+    # null-terminate the result
+    result.append(0)
+    return String(result^)
 
 
 fn b64encode(str: String) -> String:
