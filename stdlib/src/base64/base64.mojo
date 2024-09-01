@@ -90,15 +90,20 @@ alias TABLE_BASE64_OFFSETS = SIMD[DType.uint8, 16](
 fn _bitcast[
     new_dtype: DType, new_size: Int
 ](owned input: SIMD) -> SIMD[new_dtype, new_size]:
-    print("before bitcast", input)
     var result = UnsafePointer.address_of(input).bitcast[
         SIMD[new_dtype, new_size]
     ]()[]
-    print("after bitcast", result)
     return result
 
 
-fn b64encode_simd(input_bytes: List[UInt8]) -> String:
+fn b64encode_simd(input_bytes: List[UInt8, _]) -> String:
+    # +1 for the null terminator and +1 to be sure
+    var result = List[UInt8, True](capacity=int(len(input_bytes) * (4 / 3)) + 2)
+    b64encode_simd(input_bytes, result)
+    return String(result^)
+
+
+fn b64encode_simd(input_bytes: List[UInt8, _], inout result: List[UInt8, _]):
     """Performs base64 encoding on the input string using SIMD instructions.
 
     Args:
@@ -107,9 +112,6 @@ fn b64encode_simd(input_bytes: List[UInt8]) -> String:
     Returns:
         Base64 encoding of the input string.
     """
-
-    # +1 for the null terminator and +1 to be sure
-    var result = List[UInt8](capacity=int(len(input_bytes) * (4 / 3)) + 2)
     alias simd_width = 16  # TODO: Make this flexible
     alias input_simd_width = 12  # 16 * 0.75
     alias constant_13 = SIMD[DType.uint8, 16](13)
@@ -149,7 +151,6 @@ fn b64encode_simd(input_bytes: List[UInt8]) -> String:
             0, 1, 1, 2, 3, 4, 4, 5, 6, 7, 7, 8, 9, 10, 10, 11
         )
         var shuffled_vector = input_vector._dynamic_shuffle(shuffle_mask)
-        print(shuffled_vector)
 
         # We have 4 different masks to extract each group of 6 bits from the 4 bytes
         alias mask_1 = SIMD[DType.uint8, 16](
@@ -240,7 +241,6 @@ fn b64encode_simd(input_bytes: List[UInt8]) -> String:
         var shifted_4 = shuffled_vector & mask_4
 
         var ready_to_encode_per_byte = shifted_1 | shifted_2 | shifted_3 | shifted_4
-        print("ready_to_encode", ready_to_encode_per_byte)
         # See the table above for the offsets, we try to go from 6-bits values to target indexes.
         var saturated = _subtract_with_saturation[51](ready_to_encode_per_byte)
 
@@ -261,10 +261,15 @@ fn b64encode_simd(input_bytes: List[UInt8]) -> String:
     # TODO: Handle the last pieces of the input buffer
     # null-terminate the result
     result.append(0)
-    return String(result^)
 
 
 fn b64encode(str: String) -> String:
+    var out = String._buffer_type(capacity=str.byte_length() + 1)
+    b64encode(str, out=out)
+    return String(out^)
+
+
+fn b64encode(str: String, inout out: List[UInt8, True]):
     """Performs base64 encoding on the input string.
 
     Args:
@@ -277,7 +282,6 @@ fn b64encode(str: String) -> String:
     var b64chars = lookup.unsafe_ptr()
 
     var length = str.byte_length()
-    var out = String._buffer_type(capacity=length + 1)
 
     @parameter
     @always_inline
@@ -307,7 +311,6 @@ fn b64encode(str: String) -> String:
             out.append(b64chars[(si_1 * 4) % 64])
         out.append(ord("="))
     out.append(0)
-    return String(out^)
 
 
 # ===----------------------------------------------------------------------===#
