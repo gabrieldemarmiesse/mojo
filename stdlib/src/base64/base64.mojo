@@ -217,9 +217,7 @@ fn b64encode(input_bytes: List[UInt8, _], inout result: List[UInt8, _]):
         DType.uint8, simd_width
     ](0, 4, 4, 4, 8, 8, 8, 12, 12, 12, 16, 16, 16, 20, 20, 20)
 
-    # We assume input_bytes come from list, so we remove the null terminator.
-    # TODO: remove this when we can use Span
-    var input_bytes_len = len(input_bytes) - 1
+    var input_bytes_len = len(input_bytes)
 
     # TODO: add condition on cpu flags
     var input_index = 0
@@ -273,7 +271,8 @@ fn b64encode(input_string: String) -> String:
     Returns:
         The ASCII base64 encoded string.
     """
-    return b64encode(input_string._buffer)
+    # Slicing triggers a copy, but it should work with Span later on.
+    return b64encode(input_string._buffer[:-1])
 
 
 fn b64encode(input_bytes: List[UInt8, _]) -> String:
