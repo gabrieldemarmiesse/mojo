@@ -95,14 +95,9 @@ fn _bitcast[
     ]()[]
     return result
 
-# TODO: Make this available at compile-time
-fn _base64_simd_mask[size: Int](nb_value_to_load: Int) -> SIMD[DType.bool, size]:
-    var mask = SIMD[DType.bool, size](True)
-    # Since shift_left requires the value to be known at compile-time, 
-    # we must do a for loop.
-    for i in range(size - nb_value_to_load):
-        mask = mask.shift_left[1]()
-    return mask
+fn _base64_simd_mask(nb_value_to_load: Int) -> SIMD[DType.bool, simd_width]:
+    alias simple_integers = SIMD[DType.uint8, simd_width](0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+    return simple_integers < UInt8(nb_value_to_load)
 
 fn _repeat_until[dtype: DType, input_size: Int, //, target_size: Int](
     vector: SIMD[dtype, input_size]
@@ -114,18 +109,74 @@ fn _repeat_until[dtype: DType, input_size: Int, //, target_size: Int](
     else:
         return _repeat_until[target_size](vector.join(vector))
 
+alias simd_width = 16  # TODO: Make this flexible
+
+fn _to_b64_ascii(input_vector: SIMD[DType.uint8, simd_width]) ->SIMD[DType.uint8, simd_width]:
+    alias constant_13 = SIMD[DType.uint8, simd_width](13)
+
+    # We reorder the bytes to fall in their correct 4 bytes chunks
+    alias shuffle_mask = SIMD[DType.uint8, simd_width](
+        0, 1, 1, 2, 3, 4, 4, 5, 6, 7, 7, 8, 9, 10, 10, 11
+    )
+    var shuffled_vector = input_vector._dynamic_shuffle(shuffle_mask)
+
+    # We have 4 different masks to extract each group of 6 bits from the 4 bytes
+    alias mask_1 = _repeat_until[simd_width](SIMD[DType.uint8, 4](0b11111100, 0, 0, 0))
+    var masked_1 = shuffled_vector & mask_1
+    var shifted_1 = masked_1 >> 2
+
+    alias mask_2 = _repeat_until[simd_width](SIMD[DType.uint8, 4](
+        0b00000011,
+        0b11110000,
+        0,
+        0,
+    ))
+    var masked_2 = shuffled_vector & mask_2
+    var masked_2_as_uint16 = _bitcast[DType.uint16, 8](masked_2)
+    var rotated_2 = bit.rotate_bits_right[4](masked_2_as_uint16)
+    var shifted_2 = _bitcast[DType.uint8, simd_width](rotated_2)
+
+    alias mask_3 = _repeat_until[simd_width](SIMD[DType.uint8, 4](
+        0,
+        0,
+        0b00001111,
+        0b11000000,
+    ))
+    var masked_3 = shuffled_vector & mask_3
+    var masked_3_as_uint16 = _bitcast[DType.uint16, 8](masked_3)
+    var rotated_3 = bit.rotate_bits_left[2](masked_3_as_uint16)
+    var shifted_3 = _bitcast[DType.uint8, simd_width](rotated_3)
+
+    alias mask_4 = _repeat_until[simd_width](SIMD[DType.uint8, 4](
+        0,
+        0,
+        0,
+        0b00111111,
+    ))
+    var shifted_4 = shuffled_vector & mask_4
+
+    var ready_to_encode_per_byte = shifted_1 | shifted_2 | shifted_3 | shifted_4
+    # See the table above for the offsets, we try to go from 6-bits values to target indexes.
+    var saturated = _subtract_with_saturation[51](ready_to_encode_per_byte)
+
+    var mask_below_25 = ready_to_encode_per_byte <= 25
+
+    # Now are have the target indexes
+    var indices = mask_below_25.select(constant_13, saturated)
+
+    var offsets = TABLE_BASE64_OFFSETS._dynamic_shuffle(indices)
+
+    return ready_to_encode_per_byte + offsets
+    
+
 fn b64encode(input_bytes: List[UInt8, _], inout result: List[UInt8, _]):
     """Performs base64 encoding on the input string using SIMD instructions.
 
     Args:
         input_bytes: The input string.
-
-    Returns:
-        Base64 encoding of the input string.
+        result: The buffer in which to store the values.
     """
-    alias simd_width = 16  # TODO: Make this flexible
     alias input_simd_width = 12  # 16 * 0.75
-    alias constant_13 = SIMD[DType.uint8, simd_width](13)
 
     # TODO: add condition on cpu flags
     var input_index = 0
@@ -135,104 +186,25 @@ fn b64encode(input_bytes: List[UInt8, _], inout result: List[UInt8, _]):
         
         var input_vector = start_of_input_chunk.load[width=simd_width]()
 
-        # We reorder the bytes to fall in their correct 4 bytes chunks
-        alias shuffle_mask = SIMD[DType.uint8, simd_width](
-            0, 1, 1, 2, 3, 4, 4, 5, 6, 7, 7, 8, 9, 10, 10, 11
-        )
-        var shuffled_vector = input_vector._dynamic_shuffle(shuffle_mask)
-
-        # We have 4 different masks to extract each group of 6 bits from the 4 bytes
-        alias mask_1 = _repeat_until[simd_width](SIMD[DType.uint8, 4](0b11111100, 0, 0, 0))
-        var masked_1 = shuffled_vector & mask_1
-        var shifted_1 = masked_1 >> 2
-
-        alias mask_2 = SIMD[DType.uint8, simd_width](
-            0b00000011,
-            0b11110000,
-            0,
-            0,
-            0b00000011,
-            0b11110000,
-            0,
-            0,
-            0b00000011,
-            0b11110000,
-            0,
-            0,
-            0b00000011,
-            0b11110000,
-            0,
-            0,
-        )
-        var masked_2 = shuffled_vector & mask_2
-        var masked_2_as_uint16 = _bitcast[DType.uint16, 8](masked_2)
-        var rotated_2 = bit.rotate_bits_right[4](masked_2_as_uint16)
-        var shifted_2 = _bitcast[DType.uint8, simd_width](rotated_2)
-
-        alias mask_3 = SIMD[DType.uint8, simd_width](
-            0,
-            0,
-            0b00001111,
-            0b11000000,
-            0,
-            0,
-            0b00001111,
-            0b11000000,
-            0,
-            0,
-            0b00001111,
-            0b11000000,
-            0,
-            0,
-            0b00001111,
-            0b11000000,
-        )
-        var masked_3 = shuffled_vector & mask_3
-        var masked_3_as_uint16 = _bitcast[DType.uint16, 8](masked_3)
-        var rotated_3 = bit.rotate_bits_left[2](masked_3_as_uint16)
-        var shifted_3 = _bitcast[DType.uint8, simd_width](rotated_3)
-
-        alias mask_4 = SIMD[DType.uint8, simd_width](
-            0,
-            0,
-            0,
-            0b00111111,
-            0,
-            0,
-            0,
-            0b00111111,
-            0,
-            0,
-            0,
-            0b00111111,
-            0,
-            0,
-            0,
-            0b00111111,
-        )
-        var shifted_4 = shuffled_vector & mask_4
-
-        var ready_to_encode_per_byte = shifted_1 | shifted_2 | shifted_3 | shifted_4
-        # See the table above for the offsets, we try to go from 6-bits values to target indexes.
-        var saturated = _subtract_with_saturation[51](ready_to_encode_per_byte)
-
-        var mask_below_25 = ready_to_encode_per_byte <= 25
-
-        # Now are have the target indexes
-        var indices = mask_below_25.select(constant_13, saturated)
-
-        var offsets = TABLE_BASE64_OFFSETS._dynamic_shuffle(indices)
-
-        var result_vector = ready_to_encode_per_byte + offsets
+        result_vector = _to_b64_ascii(input_vector)
 
         # We write the result to the output buffer
         (result.unsafe_ptr() + len(result)).store(result_vector)
         result.size += simd_width
         input_index += input_simd_width
+    
+    # At this point we have one or two more iterations to do, 
+    # but one thing is for sure, we must use masked_load with a dynamic mask and add 
+    # == to the result where needed.
+    var nb_of_elements_to_load = min(input_simd_width, len(input_bytes) - input_index)
+    var mask = _base64_simd_mask[simd_width](nb_of_elements_to_load)
+    var start_of_input_chunk = input_bytes.unsafe_ptr() + input_index
+    var input_vector = sys.intrinsics.masked_load[width=simd_width](
+        start_of_input_chunk, mask, passthrough=SIMD[DType.uint8, simd_width](0)
+    )
 
-    # TODO: Handle the last pieces of the input buffer
-    # null-terminate the result
-    result.append(0)
+
+ 
 
 # For a nicer API, we provide those overloads:
 fn b64encode(input_string: String) -> String:
@@ -243,6 +215,8 @@ fn b64encode(input_bytes: List[UInt8, _]) -> String:
     # +1 for the null terminator and +1 to be sure
     var result = List[UInt8, True](capacity=int(len(input_bytes) * (4 / 3)) + 2)
     b64encode(input_bytes, result)
+    # null-terminate the result
+    result.append(0)
     return String(result^)
 
 
