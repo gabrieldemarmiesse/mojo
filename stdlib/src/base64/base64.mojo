@@ -95,15 +95,20 @@ fn _bitcast[
     ]()[]
     return result
 
+
 alias simd_width = 16  # TODO: Make this flexible
 
+
 fn _base64_simd_mask(nb_value_to_load: Int) -> SIMD[DType.bool, simd_width]:
-    alias simple_integers = SIMD[DType.uint8, simd_width](0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+    alias simple_integers = SIMD[DType.uint8, simd_width](
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+    )
     return simple_integers < UInt8(nb_value_to_load)
 
-fn _repeat_until[dtype: DType, input_size: Int, //, target_size: Int](
-    vector: SIMD[dtype, input_size]
-    ) -> SIMD[dtype, target_size]:
+
+fn _repeat_until[
+    dtype: DType, input_size: Int, //, target_size: Int
+](vector: SIMD[dtype, input_size]) -> SIMD[dtype, target_size]:
     @parameter
     if target_size == input_size:
         var same_vector = rebind[SIMD[dtype, target_size]](vector)
@@ -112,7 +117,9 @@ fn _repeat_until[dtype: DType, input_size: Int, //, target_size: Int](
         return _repeat_until[target_size](vector.join(vector))
 
 
-fn _to_b64_ascii(input_vector: SIMD[DType.uint8, simd_width]) ->SIMD[DType.uint8, simd_width]:
+fn _to_b64_ascii(
+    input_vector: SIMD[DType.uint8, simd_width]
+) -> SIMD[DType.uint8, simd_width]:
     alias constant_13 = SIMD[DType.uint8, simd_width](13)
 
     # We reorder the bytes to fall in their correct 4 bytes chunks
@@ -122,35 +129,41 @@ fn _to_b64_ascii(input_vector: SIMD[DType.uint8, simd_width]) ->SIMD[DType.uint8
     var shuffled_vector = input_vector._dynamic_shuffle(shuffle_mask)
 
     # We have 4 different masks to extract each group of 6 bits from the 4 bytes
-    alias mask_1 = _repeat_until[simd_width](SIMD[DType.uint8, 4](0b11111100, 0, 0, 0))
+    alias mask_1 = _repeat_until[simd_width](
+        SIMD[DType.uint8, 4](0b11111100, 0, 0, 0)
+    )
     var masked_1 = shuffled_vector & mask_1
     var shifted_1 = masked_1 >> 2
 
     alias mask_2 = _repeat_until[simd_width](
-        SIMD[DType.uint8, 4](
-        0b00000011, 0b11110000, 0,    0))
+        SIMD[DType.uint8, 4](0b00000011, 0b11110000, 0, 0)
+    )
     var masked_2 = shuffled_vector & mask_2
     var masked_2_as_uint16 = _bitcast[DType.uint16, 8](masked_2)
     var rotated_2 = bit.rotate_bits_right[4](masked_2_as_uint16)
     var shifted_2 = _bitcast[DType.uint8, simd_width](rotated_2)
 
-    alias mask_3 = _repeat_until[simd_width](SIMD[DType.uint8, 4](
-        0,
-        0,
-        0b00001111,
-        0b11000000,
-    ))
+    alias mask_3 = _repeat_until[simd_width](
+        SIMD[DType.uint8, 4](
+            0,
+            0,
+            0b00001111,
+            0b11000000,
+        )
+    )
     var masked_3 = shuffled_vector & mask_3
     var masked_3_as_uint16 = _bitcast[DType.uint16, 8](masked_3)
     var rotated_3 = bit.rotate_bits_left[2](masked_3_as_uint16)
     var shifted_3 = _bitcast[DType.uint8, simd_width](rotated_3)
 
-    alias mask_4 = _repeat_until[simd_width](SIMD[DType.uint8, 4](
-        0,
-        0,
-        0,
-        0b00111111,
-    ))
+    alias mask_4 = _repeat_until[simd_width](
+        SIMD[DType.uint8, 4](
+            0,
+            0,
+            0,
+            0b00111111,
+        )
+    )
     var shifted_4 = shuffled_vector & mask_4
 
     var ready_to_encode_per_byte = shifted_1 | shifted_2 | shifted_3 | shifted_4
@@ -165,14 +178,14 @@ fn _to_b64_ascii(input_vector: SIMD[DType.uint8, simd_width]) ->SIMD[DType.uint8
     var offsets = TABLE_BASE64_OFFSETS._dynamic_shuffle(indices)
 
     return ready_to_encode_per_byte + offsets
-    
+
 
 # TODO: Use Span instead of List as input when Span is easier to use
 fn b64encode(input_bytes: List[UInt8, _], inout result: List[UInt8, _]):
-    """Performs base64 encoding on the input string using SIMD instructions.
+    """Performs base64 encoding on the input string.
 
     Args:
-        input_bytes: The input string.
+        input_bytes: The input string buffer. Assumed to be null-terminated.
         result: The buffer in which to store the values.
     """
     alias input_simd_width = 12  # 16 * 0.75
@@ -180,12 +193,29 @@ fn b64encode(input_bytes: List[UInt8, _], inout result: List[UInt8, _]):
 
     # Could be computed at compile time when Mojo has better compile-time programming.
     # Otherwise it's fixed and not great if we want to change simd sizes
-    alias number_of_non_equal_from_number_of_elements_to_load = SIMD[DType.uint8, simd_width](
-        0,2,3,4,6,7,8,10,11,12,14,15,16,18,19,20,
+    alias number_of_non_equal_from_number_of_elements_to_load = SIMD[
+        DType.uint8, simd_width
+    ](
+        0,
+        2,
+        3,
+        4,
+        6,
+        7,
+        8,
+        10,
+        11,
+        12,
+        14,
+        15,
+        16,
+        18,
+        19,
+        20,
     )
-    alias number_of_bytes_to_store_from_nb_of_elements_to_load = SIMD[DType.uint8, simd_width](
-        0,4,4,4,8,8,8,12,12,12,16,16,16,20,20,20
-    )
+    alias number_of_bytes_to_store_from_nb_of_elements_to_load = SIMD[
+        DType.uint8, simd_width
+    ](0, 4, 4, 4, 8, 8, 8, 12, 12, 12, 16, 16, 16, 20, 20, 20)
 
     # We assume input_bytes come from list, so we remove the null terminator.
     # TODO: remove this when we can use Span
@@ -194,48 +224,73 @@ fn b64encode(input_bytes: List[UInt8, _], inout result: List[UInt8, _]):
     # TODO: add condition on cpu flags
     var input_index = 0
     while input_index < input_bytes_len:
-
         var start_of_input_chunk = input_bytes.unsafe_ptr() + input_index
-        var nb_of_elements_to_load = min(input_simd_width, input_bytes_len - input_index)
+        var nb_of_elements_to_load = min(
+            input_simd_width, input_bytes_len - input_index
+        )
         var mask = _base64_simd_mask(nb_of_elements_to_load)
 
         # We don't want to read past the input buffer
         var input_vector = sys.intrinsics.masked_load[simd_width](
-            start_of_input_chunk, mask, passthrough=SIMD[DType.uint8, simd_width](0)
+            start_of_input_chunk,
+            mask,
+            passthrough=SIMD[DType.uint8, simd_width](0),
         )
 
         result_vector = _to_b64_ascii(input_vector)
 
         # We place the '=' where needed
-        var non_equal_chars_number = number_of_non_equal_from_number_of_elements_to_load[nb_of_elements_to_load]
+        var non_equal_chars_number = number_of_non_equal_from_number_of_elements_to_load[
+            nb_of_elements_to_load
+        ]
         var equal_mask = _base64_simd_mask(int(non_equal_chars_number))
 
-        var result_vector_with_equals = equal_mask.select(result_vector, equal_vector)
+        var result_vector_with_equals = equal_mask.select(
+            result_vector, equal_vector
+        )
 
-        var nb_of_elements_to_store = number_of_bytes_to_store_from_nb_of_elements_to_load[nb_of_elements_to_load]
+        var nb_of_elements_to_store = number_of_bytes_to_store_from_nb_of_elements_to_load[
+            nb_of_elements_to_load
+        ]
         var mask_store = _base64_simd_mask(int(nb_of_elements_to_store))
         # We write the result to the output buffer
-        sys.intrinsics.masked_store(result_vector_with_equals, result.unsafe_ptr() + len(result), mask_store)
+        sys.intrinsics.masked_store(
+            result_vector_with_equals,
+            result.unsafe_ptr() + len(result),
+            mask_store,
+        )
         result.size += int(nb_of_elements_to_store)
         input_index += input_simd_width
-    
 
-
- 
 
 # For a nicer API, we provide those overloads:
 fn b64encode(input_string: String) -> String:
+    """Performs base64 encoding on the input string.
+
+    Args:
+        input_string: The input string buffer. Assumed to be null-terminated.
+
+    Returns:
+        The ASCII base64 encoded string.
+    """
     return b64encode(input_string._buffer)
 
 
 fn b64encode(input_bytes: List[UInt8, _]) -> String:
+    """Performs base64 encoding on the input string.
+
+    Args:
+        input_bytes: The input string buffer. Assumed to be null-terminated.
+
+    Returns:
+        The ASCII base64 encoded string.
+    """
     # +1 for the null terminator and +1 to be sure
     var result = List[UInt8, True](capacity=int(len(input_bytes) * (4 / 3)) + 2)
     b64encode(input_bytes, result)
     # null-terminate the result
     result.append(0)
     return String(result^)
-
 
 
 # ===----------------------------------------------------------------------===#
