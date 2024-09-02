@@ -221,6 +221,20 @@ fn b64encode(input_bytes: List[UInt8, _], inout result: List[UInt8, _]):
 
     # TODO: add condition on cpu flags
     var input_index = 0
+    while input_index + simd_width <= input_bytes_len:
+        var start_of_input_chunk = input_bytes.unsafe_ptr() + input_index
+
+        # We don't want to read past the input buffer
+        var input_vector = start_of_input_chunk.load[width=simd_width]()
+
+        result_vector = _to_b64_ascii(input_vector)
+
+        # We write the result to the output buffer
+        (result.unsafe_ptr() + len(result)).store(result_vector)
+
+        result.size += int(simd_width)
+        input_index += input_simd_width
+
     while input_index < input_bytes_len:
         var start_of_input_chunk = input_bytes.unsafe_ptr() + input_index
         var nb_of_elements_to_load = min(
