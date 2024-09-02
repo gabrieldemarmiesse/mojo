@@ -32,6 +32,7 @@ def test_b64encode():
     )
 
     assert_equal(b64encode("ABCDEFabcdef"), "QUJDREVGYWJjZGVm")
+    assert_equal(b64encode("\x00\n\x14\x1e(2<FPZdn"), "AAoUHigyPEZQWmRu")
 
 
 def test_b64decode():

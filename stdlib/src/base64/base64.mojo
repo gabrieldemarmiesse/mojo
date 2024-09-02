@@ -95,6 +95,8 @@ fn _bitcast[
     ]()[]
     return result
 
+alias simd_width = 16  # TODO: Make this flexible
+
 fn _base64_simd_mask(nb_value_to_load: Int) -> SIMD[DType.bool, simd_width]:
     alias simple_integers = SIMD[DType.uint8, simd_width](0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
     return simple_integers < UInt8(nb_value_to_load)
@@ -109,7 +111,6 @@ fn _repeat_until[dtype: DType, input_size: Int, //, target_size: Int](
     else:
         return _repeat_until[target_size](vector.join(vector))
 
-alias simd_width = 16  # TODO: Make this flexible
 
 fn _to_b64_ascii(input_vector: SIMD[DType.uint8, simd_width]) ->SIMD[DType.uint8, simd_width]:
     alias constant_13 = SIMD[DType.uint8, simd_width](13)
@@ -125,12 +126,9 @@ fn _to_b64_ascii(input_vector: SIMD[DType.uint8, simd_width]) ->SIMD[DType.uint8
     var masked_1 = shuffled_vector & mask_1
     var shifted_1 = masked_1 >> 2
 
-    alias mask_2 = _repeat_until[simd_width](SIMD[DType.uint8, 4](
-        0b00000011,
-        0b11110000,
-        0,
-        0,
-    ))
+    alias mask_2 = _repeat_until[simd_width](
+        SIMD[DType.uint8, 4](
+        0b00000011, 0b11110000, 0,    0))
     var masked_2 = shuffled_vector & mask_2
     var masked_2_as_uint16 = _bitcast[DType.uint16, 8](masked_2)
     var rotated_2 = bit.rotate_bits_right[4](masked_2_as_uint16)
@@ -169,6 +167,7 @@ fn _to_b64_ascii(input_vector: SIMD[DType.uint8, simd_width]) ->SIMD[DType.uint8
     return ready_to_encode_per_byte + offsets
     
 
+# TODO: Use Span instead of List as input when Span is easier to use
 fn b64encode(input_bytes: List[UInt8, _], inout result: List[UInt8, _]):
     """Performs base64 encoding on the input string using SIMD instructions.
 
@@ -177,31 +176,51 @@ fn b64encode(input_bytes: List[UInt8, _], inout result: List[UInt8, _]):
         result: The buffer in which to store the values.
     """
     alias input_simd_width = 12  # 16 * 0.75
+    alias equal_vector = SIMD[DType.uint8, simd_width](ord("="))
+
+    # Could be computed at compile time when Mojo has better compile-time programming.
+    # Otherwise it's fixed and not great if we want to change simd sizes
+    alias number_of_non_equal_from_number_of_elements_to_load = SIMD[DType.uint8, simd_width](
+        0,2,3,4,6,7,8,10,11,12,14,15,16,18,19,20,
+    )
+    alias number_of_bytes_to_store_from_nb_of_elements_to_load = SIMD[DType.uint8, simd_width](
+        0,4,4,4,8,8,8,12,12,12,16,16,16,20,20,20
+    )
+
+    # We assume input_bytes come from list, so we remove the null terminator.
+    # TODO: remove this when we can use Span
+    var input_bytes_len = len(input_bytes) - 1
 
     # TODO: add condition on cpu flags
     var input_index = 0
-    while input_index + simd_width <= len(input_bytes):
-        # We don't want to read past the input buffer
+    while input_index < input_bytes_len:
+
         var start_of_input_chunk = input_bytes.unsafe_ptr() + input_index
-        
-        var input_vector = start_of_input_chunk.load[width=simd_width]()
+        var nb_of_elements_to_load = min(input_simd_width, input_bytes_len - input_index)
+        var mask = _base64_simd_mask(nb_of_elements_to_load)
+
+        # We don't want to read past the input buffer
+        var input_vector = sys.intrinsics.masked_load[simd_width](
+            start_of_input_chunk, mask, passthrough=SIMD[DType.uint8, simd_width](0)
+        )
 
         result_vector = _to_b64_ascii(input_vector)
 
+        # We place the '=' where needed
+        print("nb_of_")
+        var non_equal_chars_number = number_of_non_equal_from_number_of_elements_to_load[nb_of_elements_to_load]
+        print("non_equal_chars_number: ", non_equal_chars_number)
+        var equal_mask = _base64_simd_mask(int(non_equal_chars_number))
+
+        var result_vector_with_equals = equal_mask.select(result_vector, equal_vector)
+
+        var nb_of_elements_to_store = number_of_bytes_to_store_from_nb_of_elements_to_load[nb_of_elements_to_load]
+        var mask_store = _base64_simd_mask(int(nb_of_elements_to_store))
         # We write the result to the output buffer
-        (result.unsafe_ptr() + len(result)).store(result_vector)
-        result.size += simd_width
+        sys.intrinsics.masked_store(result_vector_with_equals, result.unsafe_ptr() + len(result), mask_store)
+        result.size += int(nb_of_elements_to_store)
         input_index += input_simd_width
     
-    # At this point we have one or two more iterations to do, 
-    # but one thing is for sure, we must use masked_load with a dynamic mask and add 
-    # == to the result where needed.
-    var nb_of_elements_to_load = min(input_simd_width, len(input_bytes) - input_index)
-    var mask = _base64_simd_mask[simd_width](nb_of_elements_to_load)
-    var start_of_input_chunk = input_bytes.unsafe_ptr() + input_index
-    var input_vector = sys.intrinsics.masked_load[width=simd_width](
-        start_of_input_chunk, mask, passthrough=SIMD[DType.uint8, simd_width](0)
-    )
 
 
  
