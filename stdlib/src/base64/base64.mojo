@@ -60,25 +60,23 @@ fn _ascii_to_value(char: String) -> Int:
 # ===----------------------------------------------------------------------===#
 
 
-fn b64encode(str: String) -> String:
+# TODO: Use Span instead of List as input when Span is easier to use
+fn b64encode(input_bytes: List[UInt8, _], inout out: List[UInt8, _]):
     """Performs base64 encoding on the input string.
 
     Args:
-      str: The input string.
-
-    Returns:
-      Base64 encoding of the input string.
+        input_bytes: The input string buffer. Assumed to be null-terminated.
+        out: The buffer in which to store the values.
     """
     alias lookup = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
     var b64chars = lookup.unsafe_ptr()
 
-    var length = str.byte_length()
-    var out = String._buffer_type(capacity=length + 1)
+    var length = len(input_bytes)
 
     @parameter
     @always_inline
     fn s(idx: Int) -> Int:
-        return int(str.unsafe_ptr()[idx])
+        return int(input_bytes.unsafe_ptr()[idx])
 
     # This algorithm is based on https://arxiv.org/abs/1704.00605
     var end = length - (length % 3)
@@ -102,8 +100,37 @@ fn b64encode(str: String) -> String:
             out.append(b64chars[((si * 16) % 64) + si_1 // 16])
             out.append(b64chars[(si_1 * 4) % 64])
         out.append(ord("="))
-    out.append(0)
-    return String(out^)
+
+
+# For a nicer API, we provide those overloads:
+fn b64encode(input_string: String) -> String:
+    """Performs base64 encoding on the input string.
+
+    Args:
+        input_string: The input string buffer. Assumed to be null-terminated.
+
+    Returns:
+        The ASCII base64 encoded string.
+    """
+    # Slicing triggers a copy, but it should work with Span later on.
+    return b64encode(input_string._buffer[:-1])
+
+
+fn b64encode(input_bytes: List[UInt8, _]) -> String:
+    """Performs base64 encoding on the input string.
+
+    Args:
+        input_bytes: The input string buffer. Assumed to be null-terminated.
+
+    Returns:
+        The ASCII base64 encoded string.
+    """
+    # +1 for the null terminator and +1 to be sure
+    var result = List[UInt8, True](capacity=int(len(input_bytes) * (4 / 3)) + 2)
+    b64encode(input_bytes, result)
+    # null-terminate the result
+    result.append(0)
+    return String(result^)
 
 
 # ===----------------------------------------------------------------------===#
