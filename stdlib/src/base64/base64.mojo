@@ -207,9 +207,7 @@ fn b64encode(input_bytes: List[UInt8, _], inout result: List[UInt8, _]):
         result_vector = _to_b64_ascii(input_vector)
 
         # We place the '=' where needed
-        print("nb_of_")
         var non_equal_chars_number = number_of_non_equal_from_number_of_elements_to_load[nb_of_elements_to_load]
-        print("non_equal_chars_number: ", non_equal_chars_number)
         var equal_mask = _base64_simd_mask(int(non_equal_chars_number))
 
         var result_vector_with_equals = equal_mask.select(result_vector, equal_vector)
