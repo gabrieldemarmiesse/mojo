@@ -95,15 +95,26 @@ fn _bitcast[
     ]()[]
     return result
 
+# TODO: Make this available at compile-time
+fn _base64_simd_mask[size: Int](nb_value_to_load: Int) -> SIMD[DType.bool, size]:
+    var mask = SIMD[DType.bool, size](True)
+    # Since shift_left requires the value to be known at compile-time, 
+    # we must do a for loop.
+    for i in range(size - nb_value_to_load):
+        mask = mask.shift_left[1]()
+    return mask
 
-fn b64encode_simd(input_bytes: List[UInt8, _]) -> String:
-    # +1 for the null terminator and +1 to be sure
-    var result = List[UInt8, True](capacity=int(len(input_bytes) * (4 / 3)) + 2)
-    b64encode_simd(input_bytes, result)
-    return String(result^)
+fn _repeat_until[dtype: DType, input_size: Int, //, target_size: Int](
+    vector: SIMD[dtype, input_size]
+    ) -> SIMD[dtype, target_size]:
+    @parameter
+    if target_size == input_size:
+        var same_vector = rebind[SIMD[dtype, target_size]](vector)
+        return same_vector
+    else:
+        return _repeat_until[target_size](vector.join(vector))
 
-
-fn b64encode_simd(input_bytes: List[UInt8, _], inout result: List[UInt8, _]):
+fn b64encode(input_bytes: List[UInt8, _], inout result: List[UInt8, _]):
     """Performs base64 encoding on the input string using SIMD instructions.
 
     Args:
@@ -114,67 +125,28 @@ fn b64encode_simd(input_bytes: List[UInt8, _], inout result: List[UInt8, _]):
     """
     alias simd_width = 16  # TODO: Make this flexible
     alias input_simd_width = 12  # 16 * 0.75
-    alias constant_13 = SIMD[DType.uint8, 16](13)
+    alias constant_13 = SIMD[DType.uint8, simd_width](13)
 
     # TODO: add condition on cpu flags
     var input_index = 0
-    while input_index + input_simd_width <= len(input_bytes):
+    while input_index + simd_width <= len(input_bytes):
         # We don't want to read past the input buffer
         var start_of_input_chunk = input_bytes.unsafe_ptr() + input_index
-        alias load_mask = SIMD[DType.bool, 16](
-            True,
-            True,
-            True,
-            True,
-            True,
-            True,
-            True,
-            True,
-            True,
-            True,
-            True,
-            True,
-            False,
-            False,
-            False,
-            False,
-        )
-        alias passthrough = SIMD[DType.uint8, 16](0)
-        # TODO: Only do a masked_load at the end.
-        var input_vector = sys.intrinsics.masked_load(
-            start_of_input_chunk, mask=load_mask, passthrough=passthrough
-        )
+        
+        var input_vector = start_of_input_chunk.load[width=simd_width]()
 
-        # We reorder the bytes to fall in their correct 4 bytes chunks, 15 is a dummy value
-        alias UNUSED_2 = 15
-        alias shuffle_mask = SIMD[DType.uint8, 16](
+        # We reorder the bytes to fall in their correct 4 bytes chunks
+        alias shuffle_mask = SIMD[DType.uint8, simd_width](
             0, 1, 1, 2, 3, 4, 4, 5, 6, 7, 7, 8, 9, 10, 10, 11
         )
         var shuffled_vector = input_vector._dynamic_shuffle(shuffle_mask)
 
         # We have 4 different masks to extract each group of 6 bits from the 4 bytes
-        alias mask_1 = SIMD[DType.uint8, 16](
-            0b11111100,
-            0,
-            0,
-            0,
-            0b11111100,
-            0,
-            0,
-            0,
-            0b11111100,
-            0,
-            0,
-            0,
-            0b11111100,
-            0,
-            0,
-            0,
-        )
+        alias mask_1 = _repeat_until[simd_width](SIMD[DType.uint8, 4](0b11111100, 0, 0, 0))
         var masked_1 = shuffled_vector & mask_1
         var shifted_1 = masked_1 >> 2
 
-        alias mask_2 = SIMD[DType.uint8, 16](
+        alias mask_2 = SIMD[DType.uint8, simd_width](
             0b00000011,
             0b11110000,
             0,
@@ -195,9 +167,9 @@ fn b64encode_simd(input_bytes: List[UInt8, _], inout result: List[UInt8, _]):
         var masked_2 = shuffled_vector & mask_2
         var masked_2_as_uint16 = _bitcast[DType.uint16, 8](masked_2)
         var rotated_2 = bit.rotate_bits_right[4](masked_2_as_uint16)
-        var shifted_2 = _bitcast[DType.uint8, 16](rotated_2)
+        var shifted_2 = _bitcast[DType.uint8, simd_width](rotated_2)
 
-        alias mask_3 = SIMD[DType.uint8, 16](
+        alias mask_3 = SIMD[DType.uint8, simd_width](
             0,
             0,
             0b00001111,
@@ -218,9 +190,9 @@ fn b64encode_simd(input_bytes: List[UInt8, _], inout result: List[UInt8, _]):
         var masked_3 = shuffled_vector & mask_3
         var masked_3_as_uint16 = _bitcast[DType.uint16, 8](masked_3)
         var rotated_3 = bit.rotate_bits_left[2](masked_3_as_uint16)
-        var shifted_3 = _bitcast[DType.uint8, 16](rotated_3)
+        var shifted_3 = _bitcast[DType.uint8, simd_width](rotated_3)
 
-        alias mask_4 = SIMD[DType.uint8, 16](
+        alias mask_4 = SIMD[DType.uint8, simd_width](
             0,
             0,
             0,
@@ -262,55 +234,17 @@ fn b64encode_simd(input_bytes: List[UInt8, _], inout result: List[UInt8, _]):
     # null-terminate the result
     result.append(0)
 
-
-fn b64encode(str: String) -> String:
-    var out = String._buffer_type(capacity=str.byte_length() + 1)
-    b64encode(str, out=out)
-    return String(out^)
+# For a nicer API, we provide those overloads:
+fn b64encode(input_string: String) -> String:
+    return b64encode(input_string._buffer)
 
 
-fn b64encode(str: String, inout out: List[UInt8, True]):
-    """Performs base64 encoding on the input string.
+fn b64encode(input_bytes: List[UInt8, _]) -> String:
+    # +1 for the null terminator and +1 to be sure
+    var result = List[UInt8, True](capacity=int(len(input_bytes) * (4 / 3)) + 2)
+    b64encode(input_bytes, result)
+    return String(result^)
 
-    Args:
-      str: The input string.
-
-    Returns:
-      Base64 encoding of the input string.
-    """
-    alias lookup = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-    var b64chars = lookup.unsafe_ptr()
-
-    var length = str.byte_length()
-
-    @parameter
-    @always_inline
-    fn s(idx: Int) -> Int:
-        return int(str.unsafe_ptr()[idx])
-
-    # This algorithm is based on https://arxiv.org/abs/1704.00605
-    var end = length - (length % 3)
-    for i in range(0, end, 3):
-        var si = s(i)
-        var si_1 = s(i + 1)
-        var si_2 = s(i + 2)
-        out.append(b64chars[si // 4])
-        out.append(b64chars[((si * 16) % 64) + si_1 // 16])
-        out.append(b64chars[((si_1 * 4) % 64) + si_2 // 64])
-        out.append(b64chars[si_2 % 64])
-
-    if end < length:
-        var si = s(end)
-        out.append(b64chars[si // 4])
-        if end == length - 1:
-            out.append(b64chars[(si * 16) % 64])
-            out.append(ord("="))
-        elif end == length - 2:
-            var si_1 = s(end + 1)
-            out.append(b64chars[((si * 16) % 64) + si_1 // 16])
-            out.append(b64chars[(si_1 * 4) % 64])
-        out.append(ord("="))
-    out.append(0)
 
 
 # ===----------------------------------------------------------------------===#
