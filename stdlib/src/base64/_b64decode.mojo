@@ -31,145 +31,43 @@ from collections import InlineArray
 
 # fmt: off
 # TODO: generate at compile-time.
+
+alias INV = 255 # invalid
+alias WSP = 64  # whitespace
+
 alias to_base64_value = InlineArray[UInt8, 256](
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 64 ,
-    64 , 255, 64 , 64 , 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 64 , 255, 255, 255, 255, 255, 255, 255, 
-    255, 255, 255, 62 , 255, 255, 255, 63 , 52 , 53 ,
-    54 , 55 , 56 , 57 , 58 , 59 , 60 , 61 , 255, 255,
-    255, 255, 255, 255, 255, 0  , 1  , 2  , 3  , 4  ,
+    INV, INV, INV, INV, INV, INV, INV, INV, INV, WSP,
+    WSP, INV, WSP, WSP, INV, INV, INV, INV, INV, INV,
+    INV, INV, INV, INV, INV, INV, INV, INV, INV, INV,
+    INV, INV, WSP, INV, INV, INV, INV, INV, INV, INV,
+    INV, INV, INV, 62 , INV, INV, INV, 63 , 52 , 53 ,
+    54 , 55 , 56 , 57 , 58 , 59 , 60 , 61 , INV, INV,
+    INV, INV, INV, INV, INV, 0  , 1  , 2  , 3  , 4  ,
     5  , 6  , 7  , 8  , 9  , 10 , 11 , 12 , 13 , 14 ,
     15 , 16 , 17 , 18 , 19 , 20 , 21 , 22 , 23 , 24 ,
-    25 , 255, 255, 255, 255, 255, 255, 26 , 27 , 28 ,
-    29 , 30 ,
-    31,32,33,34,35,36,37,38,39,40,
-    41,
-    42,
-    43,44,45,46,47,48,49,50,51,255,
-    255,
-    255,
-    255,255,255,255,255,255,255,255,255,255,255,255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
-    255,
+    25 , INV, INV, INV, INV, INV, INV, 26 , 27 , 28 ,
+    29 , 30 , 31 , 32 , 33 , 34 , 35 , 36 , 37 , 38 ,
+    39 , 40 , 41 , 42 , 43 , 44 , 45 , 46 , 47 , 48 ,
+    49 , 50 , 51 , INV, INV, INV, INV, INV, INV, INV,
+    INV, INV, INV, INV, INV, INV, INV, INV, INV, INV,
+    INV, INV, INV, INV, INV, INV, INV, INV, INV, INV,
+    INV, INV, INV, INV, INV, INV, INV, INV, INV, INV,
+    INV, INV, INV, INV, INV, INV, INV, INV, INV, INV,
+    INV, INV, INV, INV, INV, INV, INV, INV, INV, INV,
+    INV, INV, INV, INV, INV, INV, INV, INV, INV, INV,
+    INV, INV, INV, INV, INV, INV, INV, INV, INV, INV,
+    INV, INV, INV, INV, INV, INV, INV, INV, INV, INV,
+    INV, INV, INV, INV, INV, INV, INV, INV, INV, INV,
+    INV, INV, INV, INV, INV, INV, INV, INV, INV, INV,
+    INV, INV, INV, INV, INV, INV, INV, INV, INV, INV,
+    INV, INV, INV, INV, INV, INV, INV, INV, INV, INV,
+    INV, INV, INV, INV, INV, INV,
 )
 # fmt: on
+
+
+fn is_whitespace(x: UInt8) -> Bool:
+    return to_base64_value[int(x)] == WSP
 
 
 @value
@@ -188,10 +86,7 @@ fn trim_src_end(src: UnsafePointer[UInt8], src_length: Int) -> TrimmingInfo:
     # skip trailing spaces
 
     var last_element = src[src_length_after_trimming - 1]
-    while (
-        src_length_after_trimming > 0
-        and to_base64_value[int(last_element)] == 64
-    ):
+    while src_length_after_trimming > 0 and is_whitespace(last_element):
         src_length_after_trimming -= 1
         last_element = src[src_length_after_trimming - 1]
 
@@ -206,10 +101,7 @@ fn trim_src_end(src: UnsafePointer[UInt8], src_length: Int) -> TrimmingInfo:
         equal_signs = 1
         # skip trailing spaces
         last_element = src[src_length_after_trimming - 1]
-        while (
-            src_length_after_trimming > 0
-            and to_base64_value[int(last_element)] == 64
-        ):
+        while src_length_after_trimming > 0 and is_whitespace(last_element):
             src_length_after_trimming -= 1
             last_element = src[src_length_after_trimming - 1]
 
